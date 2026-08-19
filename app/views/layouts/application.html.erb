@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="<%= html_lang %>">
+  <head>
+    <%= javascript_tag nonce: true do %>
+      document.documentElement.dataset.theme = localStorage.getItem("kura.theme") || "system"
+    <% end %>
+    <title><%= content_for(:title) || "KuraChat" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="application-name" content="KuraChat">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#141311">
+    <meta name="color-scheme" content="light dark">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= yield :head %>
+    <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="icon" href="/icon.png" type="image/png" sizes="512x512">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+    <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+    <script type="application/json" id="i18n"><%= raw t("js").to_json %></script>
+  </head>
+  <body class="<%= content_for(:body_class) || "app-body" %>" data-controller="theme">
+    <%= yield %>
+  </body>
+</html>

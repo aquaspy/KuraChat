@@ -1,0 +1,22 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${BIND:-127.0.0.1:3000}:80"
+    env_file: .env
+    environment:
+      RAILS_ENV: production
+      SOLID_QUEUE_IN_PUMA: "true"
+      DB_POOL: "10"
+    volumes:
+      - kura_chat_data:/rails/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/up"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  kura_chat_data:

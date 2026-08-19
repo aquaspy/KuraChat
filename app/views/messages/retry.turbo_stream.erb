@@ -1,0 +1,3 @@
+<%= turbo_stream.replace @message do %>
+  <%= render "messages/message", message: @message, conversation: @conversation %>
+<% end %>

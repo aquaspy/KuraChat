@@ -1,0 +1,19 @@
+<div id="share-panel-<%= conversation.id %>">
+  <p><%= t("app.share_lede") %></p>
+  <% if conversation.shared? %>
+    <div class="share-url-row">
+      <input type="text" readonly value="<%= shared_conversation_url(conversation.share_token) %>" data-share-target="url" data-action="focus->share#selectUrl click->share#selectUrl">
+      <button type="button" class="btn-dialog" data-action="share#copy"><%= t("app.copy") %></button>
+    </div>
+    <p class="share-status" data-share-target="status" hidden></p>
+    <div class="confirm-actions">
+      <%= button_to t("app.share_new"), conversation_share_path(conversation, q: params[:q]), method: :patch, class: "btn-dialog" %>
+      <%= button_to t("app.share_stop"), conversation_share_path(conversation, q: params[:q]), method: :delete, class: "btn-dialog danger" %>
+    </div>
+  <% else %>
+    <div class="confirm-actions">
+      <button type="button" class="btn-dialog" data-action="share#close"><%= t("app.cancel") %></button>
+      <%= button_to t("app.share_create"), conversation_share_path(conversation, q: params[:q]), method: :post, class: "btn-dialog primary" %>
+    </div>
+  <% end %>
+</div>

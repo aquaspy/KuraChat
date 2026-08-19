@@ -1,0 +1,19 @@
+<div class="theme-switch" role="group" aria-label="<%= t("auth.theme") %>">
+  <button type="button" class="theme-choice" data-action="theme#set" data-theme-choice="light" title="<%= t("js.theme_light") %>" aria-label="<%= t("js.theme_light") %>">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="2.4" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <path d="M8 1.6v1.5M8 12.9v1.5M1.6 8h1.5M12.9 8h1.5M3.3 3.3l1.1 1.1M11.6 11.6l1.1 1.1M3.3 12.7l1.1-1.1M11.6 4.4l1.1-1.1" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>
+  </button>
+  <button type="button" class="theme-choice" data-action="theme#set" data-theme-choice="system" title="<%= t("js.theme_system") %>" aria-label="<%= t("js.theme_system") %>">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.3"/>
+      <path d="M8 3a5 5 0 0 0 0 10Z" fill="currentColor"/>
+    </svg>
+  </button>
+  <button type="button" class="theme-choice" data-action="theme#set" data-theme-choice="dark" title="<%= t("js.theme_dark") %>" aria-label="<%= t("js.theme_dark") %>">
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M10.2 2.4A5.4 5.4 0 1 0 13.6 11 4.4 4.4 0 0 1 10.2 2.4Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+  </button>
+</div>

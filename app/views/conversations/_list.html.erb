@@ -1,0 +1,13 @@
+<nav class="note-list" id="conversation-list">
+  <% if @conversations.blank? %>
+    <p class="empty-list muted"><%= t("chat.empty_list") %></p>
+  <% else %>
+    <% @conversations.each do |conversation| %>
+      <div class="note-item <%= "is-on" if @conversation&.id == conversation.id %>">
+        <%= link_to conversation_path(conversation, q: @query), class: "note-item-link" do %>
+          <%= render "conversations/title", conversation: conversation %>
+        <% end %>
+      </div>
+    <% end %>
+  <% end %>
+</nav>

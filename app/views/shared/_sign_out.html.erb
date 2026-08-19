@@ -1,0 +1,4 @@
+<%= button_to logout_path, method: :delete, class: "btn-io", data: { controller: "logout", action: "submit->logout#wipe" } do %>
+  <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.2 3.2H4.4A1.4 1.4 0 0 0 3 4.6v6.8A1.4 1.4 0 0 0 4.4 12.8h1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M6.8 8h6.2M10.4 5.4 13 8l-2.6 2.6" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <span><%= t("app.sign_out") %></span>
+<% end %>

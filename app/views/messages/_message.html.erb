@@ -1,0 +1,17 @@
+<article id="<%= dom_id(message) %>" class="msg msg-<%= message.role %> is-<%= message.status || "done" %>">
+  <% if message.role == "user" %>
+    <div class="msg-body"><%= simple_format(ERB::Util.h(message.content)) %></div>
+    <% if message.web? %><p class="msg-meta"><%= t("chat.web") %></p><% end %>
+  <% elsif message.status.in?(%w[pending streaming]) %>
+    <%= render "messages/body", message: message %>
+    <p class="msg-status" id="<%= dom_id(message, :status) %>"><%= message.status == "pending" ? t("chat.thinking") : t("chat.thinking") %></p>
+  <% elsif message.status == "failed" %>
+    <p class="msg-error"><%= t("chat.failed") %></p>
+    <% unless conversation_inflight?(message.conversation) %>
+      <%= button_to t("chat.retry"), retry_conversation_message_path(message.conversation, message), class: "btn-dialog primary" %>
+    <% end %>
+  <% else %>
+    <div class="msg-body md"><%= MarkdownRenderer.render(message.content) %></div>
+    <%= render "messages/citations", message: message %>
+  <% end %>
+</article>

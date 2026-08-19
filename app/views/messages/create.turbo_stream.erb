@@ -1,0 +1,9 @@
+<%= turbo_stream.append "transcript" do %>
+  <%= render "messages/message", message: @user_message, conversation: @conversation %>
+<% end %>
+<%= turbo_stream.append "transcript" do %>
+  <%= render "messages/message", message: @assistant, conversation: @conversation %>
+<% end %>
+<%= turbo_stream.replace "conversation-list" do %>
+  <%= render "conversations/list" %>
+<% end %>

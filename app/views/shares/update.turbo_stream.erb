@@ -1,0 +1,6 @@
+<%= turbo_stream.replace "share-panel-#{@conversation.id}" do %>
+  <%= render "conversations/share_panel", conversation: @conversation %>
+<% end %>
+<%= turbo_stream.replace "share-btn-#{@conversation.id}" do %>
+  <%= render "conversations/share_button", conversation: @conversation %>
+<% end %>

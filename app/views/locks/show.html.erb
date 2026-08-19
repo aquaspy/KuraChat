@@ -1,0 +1,19 @@
+<% content_for :title, t("titles.lock") %>
+<% content_for :body_class, "auth-body" %>
+
+<section class="auth-card">
+  <%= render "shared/wordmark" %>
+  <h1><%= t("app.unlock") %></h1>
+  <p class="lede"><%= t("app.unlock_lede", email: current_user.email) %></p>
+
+  <%= form_with url: unlock_path, class: "auth-form" do %>
+    <% if alert %><p class="error"><%= alert %></p><% end %>
+    <label><%= t("auth.password") %>
+      <%= password_field_tag :password, nil, autocomplete: "current-password", required: true, minlength: 8, autofocus: true %>
+    </label>
+    <%= submit_tag t("app.unlock"), class: "btn-primary" %>
+  <% end %>
+
+  <%= render "shared/sign_out" %>
+  <%= render "shared/theme_switch" %>
+</section>

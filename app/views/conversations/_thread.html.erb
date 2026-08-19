@@ -1,0 +1,45 @@
+<% if @conversation %>
+  <%= turbo_stream_from current_user, @conversation %>
+  <% inflight = conversation_inflight?(@conversation) %>
+  <div class="editor-bar" data-controller="confirm share" data-share-copied-value="<%= t("js.copied") %>">
+    <%= link_to conversations_path(q: @query), class: "icon-btn back", aria: { label: t("app.cancel") } do %>
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 3.2 5.4 8l4.8 4.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <% end %>
+    <%= form_with model: @conversation, class: "title-form", data: { turbo: true } do |f| %>
+      <%= f.text_field :title, placeholder: t("chat.untitled"), class: "folder-input", aria: { label: t("chat.rename") } %>
+    <% end %>
+    <span class="bar-spacer"></span>
+    <%= render "conversations/share_button", conversation: @conversation %>
+    <button type="button" class="icon-btn danger" data-action="confirm#open" data-url="<%= conversation_path(@conversation) %>" data-message="<%= t("chat.delete_confirm") %>" title="<%= t("app.delete") %>" aria-label="<%= t("app.delete") %>">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 5h9M6.2 5V3.8A1.2 1.2 0 0 1 7.4 2.6h1.2A1.2 1.2 0 0 1 9.8 3.8V5m-5.1 0 .5 7.2A1.3 1.3 0 0 0 6.5 13.4h3a1.3 1.3 0 0 0 1.3-1.2L11.3 5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </button>
+    <dialog class="confirm-dialog" data-confirm-target="box" data-action="click->confirm#backdrop">
+      <p data-confirm-target="message"><%= t("chat.delete_confirm") %></p>
+      <div class="confirm-actions">
+        <button type="button" class="btn-dialog" data-action="confirm#close"><%= t("app.cancel") %></button>
+        <%= link_to t("app.delete"), conversation_path(@conversation), data: { turbo_method: :delete, confirm_target: "destroy" }, class: "btn-dialog danger" %>
+      </div>
+    </dialog>
+    <dialog class="confirm-dialog share-dialog" data-share-target="box" data-action="click->share#backdrop">
+      <p class="share-heading"><%= t("app.share") %></p>
+      <%= render "conversations/share_panel", conversation: @conversation %>
+    </dialog>
+  </div>
+
+  <div class="transcript" id="transcript" data-controller="transcript" data-action="turbo:before-stream-render@document->transcript#appended">
+    <% (@messages || []).each do |message| %>
+      <%= render "messages/message", message: message, conversation: @conversation %>
+    <% end %>
+  </div>
+
+  <%= form_with url: conversation_messages_path(@conversation), class: "composer", data: { controller: "composer web-toggle", composer_streaming_value: inflight, action: "keydown->composer#key" } do %>
+    <label class="web-toggle" title="<%= t("chat.web_hint") %>">
+      <%= check_box_tag :web, "1", false, data: { web_toggle_target: "box", action: "change->web-toggle#persist" } %>
+      <span><%= t("chat.web") %></span>
+    </label>
+    <%= text_area_tag :content, nil, rows: 1, required: true, maxlength: 16384, placeholder: t("chat.placeholder"), data: { composer_target: "input", action: "input->composer#resize" } %>
+    <button type="submit" class="btn-primary" data-composer-target="submit"><%= t("chat.send") %></button>
+  <% end %>
+<% else %>
+  <p class="empty-editor"><%= t("chat.empty") %></p>
+<% end %>

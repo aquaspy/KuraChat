@@ -1,0 +1,24 @@
+<% content_for :title, t("titles.login") %>
+<% content_for :body_class, "auth-body" %>
+
+<section class="auth-card">
+  <%= render "shared/wordmark" %>
+  <h1><%= t("auth.sign_in") %></h1>
+  <p class="lede"><%= t("auth.sign_in_lede") %></p>
+
+  <%= form_with url: login_path, class: "auth-form" do %>
+    <% if alert %><p class="error"><%= alert %></p><% end %>
+    <label><%= t("auth.email") %>
+      <%= email_field_tag :email, params[:email], autocomplete: "username", required: true %>
+    </label>
+    <label><%= t("auth.password") %>
+      <%= password_field_tag :password, nil, autocomplete: "current-password", required: true, minlength: 8 %>
+    </label>
+    <%= submit_tag t("auth.sign_in"), class: "btn-primary" %>
+  <% end %>
+
+  <% if signup_enabled? %>
+    <p class="auth-foot"><%= t("auth.no_account") %> <%= link_to t("auth.create_one"), signup_path %></p>
+  <% end %>
+  <%= render "shared/theme_switch" %>
+</section>

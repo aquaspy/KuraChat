@@ -1,0 +1,59 @@
+<% content_for :title, t("titles.app") %>
+
+<%= button_to "", lock_path, method: :post, id: "lock-now", class: "sr-only", tabindex: -1, form: { id: "lock-now-form" } %>
+<% if notice %><p class="flash flash-notice" role="status"><%= notice %></p><% end %>
+<% if alert %><p class="flash flash-alert" role="alert"><%= alert %></p><% end %>
+<div class="app-shell <%= "is-editing" if @conversation %>" data-controller="layout lock offline">
+  <p class="offline-banner" data-offline-target="banner" hidden><%= t("chat.offline") %></p>
+
+  <header class="mobile-top">
+    <%= render "shared/wordmark" %>
+    <button type="button" class="icon-btn" data-action="theme#cycle" data-theme-button title="<%= t("auth.theme") %>" aria-label="<%= t("auth.theme") %>">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 3a5 5 0 0 0 0 10Z" fill="currentColor"/></svg>
+    </button>
+    <button type="button" class="icon-btn" data-action="lock#lock" title="<%= t("app.lock") %>" aria-label="<%= t("app.lock") %>">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.4" y="7.2" width="9.2" height="6.4" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.3 7.2V5.4a2.7 2.7 0 0 1 5.4 0v1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+    </button>
+    <button type="button" class="icon-btn" data-action="layout#toggleMenu" data-layout-target="menuButton" title="<%= t("app.more") %>" aria-label="<%= t("app.more") %>" aria-expanded="false">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="3.5" r="1.1" fill="currentColor"/><circle cx="8" cy="8" r="1.1" fill="currentColor"/><circle cx="8" cy="12.5" r="1.1" fill="currentColor"/></svg>
+    </button>
+    <div class="mobile-menu" data-layout-target="menu" hidden>
+      <%= button_to lock_path, method: :post, class: "btn-io" do %>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.4" y="7.2" width="9.2" height="6.4" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.3 7.2V5.4a2.7 2.7 0 0 1 5.4 0v1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span><%= t("app.lock") %></span>
+      <% end %>
+      <%= render "shared/sign_out" %>
+    </div>
+  </header>
+
+  <aside class="col-list">
+    <div class="list-head">
+      <div class="brand desktop-only">
+        <%= render "shared/wordmark" %>
+      </div>
+      <%= button_to conversations_path, class: "btn-new", form: { class: "desktop-only" } do %>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span><%= t("chat.new") %></span>
+      <% end %>
+      <%= form_with url: conversations_path, method: :get, class: "search-form" do %>
+        <%= search_field_tag :q, @query, placeholder: t("app.search"), class: "search", enterkeyhint: "search" %>
+      <% end %>
+    </div>
+    <%= render "conversations/list" %>
+    <div class="sidebar-foot desktop-only">
+      <%= button_to lock_path, method: :post, class: "btn-io" do %>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3.4" y="7.2" width="9.2" height="6.4" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M5.3 7.2V5.4a2.7 2.7 0 0 1 5.4 0v1.8" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+        <span><%= t("app.lock") %></span>
+      <% end %>
+      <%= render "shared/sign_out" %>
+    </div>
+  </aside>
+
+  <section class="col-editor">
+    <%= render "conversations/thread" %>
+  </section>
+
+  <%= button_to conversations_path, class: "fab", form: { class: "fab-form" }, aria: { label: t("chat.new") } do %>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+  <% end %>
+</div>

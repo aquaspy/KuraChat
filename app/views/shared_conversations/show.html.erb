@@ -1,0 +1,25 @@
+<% content_for :title, t("titles.shared", title: @conversation.display_title) %>
+<% content_for :body_class, "auth-body" %>
+<% content_for :head do %>
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+<% end %>
+
+<article class="share-card share-chat">
+  <%= render "shared/wordmark" %>
+  <h1><%= @conversation.display_title %></h1>
+  <div class="share-thread">
+    <% @messages.each do |message| %>
+      <section class="msg msg-<%= message.role %>">
+        <% if message.role == "user" %>
+          <div class="msg-body"><%= simple_format(ERB::Util.h(message.content)) %></div>
+        <% else %>
+          <div class="msg-body md"><%= MarkdownRenderer.render(message.content) %></div>
+          <%= render "messages/citations", message: message %>
+        <% end %>
+      </section>
+    <% end %>
+  </div>
+  <p class="share-foot"><%= t("app.shared_from") %></p>
+  <%= render "shared/theme_switch" %>
+</article>

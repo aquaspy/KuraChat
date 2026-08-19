@@ -1,0 +1,1 @@
+<div class="msg-body" id="<%= dom_id(message, :body) %>"><%= simple_format(ERB::Util.h(message.content.to_s.presence || "…")) %></div>
