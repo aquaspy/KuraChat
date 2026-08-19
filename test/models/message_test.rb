@@ -34,4 +34,16 @@ class MessageTest < ActiveSupport::TestCase
     msg = @chat.messages.new(role: "assistant", status: "complete", content: "x" * 20_000)
     assert msg.valid?
   end
+
+  test "compact_tool_json keeps titles and drops extracts" do
+    json = {
+      "query" => "rails",
+      "results" => [ { "title" => "Docs", "url" => "https://rubyonrails.org", "snippet" => "x" * 1800 } ]
+    }.to_json
+    compact = Message.compact_tool_json(json)
+    parsed = JSON.parse(compact)
+    assert_equal "rails", parsed["query"]
+    assert_equal "Docs", parsed["results"][0]["title"]
+    assert_nil parsed["results"][0]["snippet"]
+  end
 end

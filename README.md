@@ -8,7 +8,8 @@ Messages are stored in plaintext SQLite on this server. They are sent to xAI to 
 
 ```bash
 bin/setup
-# put XAI_API_KEY in .env or export it
+export XAI_API_KEY=...          # required to generate replies
+export KAGI_API_KEY=...         # optional; only for the Web toggle
 bin/dev
 ```
 
@@ -28,13 +29,36 @@ That writes a new `config/master.key`. Do not commit it.
 On the server, with Docker installed:
 
 ```bash
+git clone https://github.com/aquaspy/KuraChat.git
+cd KuraChat
 cp .env.example .env
-# set SECRET_KEY_BASE (see below), KURA_HOST, XAI_API_KEY
-# optional: KAGI_API_KEY for the Web toggle
+```
+
+Edit `.env`. At minimum set:
+
+```bash
+SECRET_KEY_BASE=$(openssl rand -hex 64)   # paste the output into .env
+KURA_HOST=chat.example.com
+XAI_API_KEY=xai-...                       # from https://console.x.ai
+# KAGI_API_KEY=...                        # optional, for Web search
+SIGNUP_ENABLED=true                       # first account, then false
+FORCE_SSL=false                           # true once Caddy/nginx terminates HTTPS
+BIND=127.0.0.1:3000
+```
+
+Then:
+
+```bash
 docker compose up -d --build
 ```
 
-Create the first account in the browser, then lock signup:
+Create the first account in the browser (http://127.0.0.1:3000), **or** from the shell:
+
+```bash
+docker compose exec web bin/rails kura:create EMAIL=you@x.com PASSWORD='at-least-8'
+```
+
+Lock signup so strangers cannot burn your API credits:
 
 ```bash
 # in .env
@@ -70,11 +94,15 @@ Losing the key does not lose chats. It only invalidates session cookies. Generat
 
 ### Users on the server
 
+Same rake tasks as KuraNotes:
+
 ```bash
 docker compose exec web bin/rails kura:users
 docker compose exec web bin/rails kura:create EMAIL=you@x.com PASSWORD='at-least-8'
 docker compose exec web bin/rails kura:password EMAIL=you@x.com PASSWORD='new-secret'
 ```
+
+`kura:password` is the admin reset. There is no email recovery.
 
 ### Proxy (Caddy or nginx)
 
@@ -99,6 +127,7 @@ location /cable {
   proxy_set_header Upgrade $http_upgrade;
   proxy_set_header Connection "upgrade";
   proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-Proto $scheme;
   proxy_read_timeout 3600;
 }
 
@@ -109,7 +138,13 @@ location / {
 }
 ```
 
+### Backup
+
 Chats live in the `kura_chat_data` volume (`storage/production.sqlite3`). Back that up.
+
+```bash
+docker compose exec web tar -C /rails/storage -cf - . > kurachat-backup.tar
+```
 
 Shared browsers: Sign out **and** wait for the cache wipe. Until then another person who opens the PWA offline can see the previous user’s cached conversation HTML.
 
@@ -117,12 +152,21 @@ Shared browsers: Sign out **and** wait for the cache wipe. Until then another pe
 
 A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds Kagi Search ($12 / 1k) plus up to 3 page extracts ($4 / 1k pages), about $0.024 extra. The toggle defaults off.
 
+Long chats are compacted automatically: Grok only sees the last 16 visible messages plus a short rolling summary. Old Kagi extracts are not resent on later turns. The full transcript stays in SQLite.
+
+Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Web turns.
+
 ## Keys
 
 | Env | What |
 | --- | --- |
+| `SECRET_KEY_BASE` | Session cookies (Compose). `openssl rand -hex 64` |
 | `XAI_API_KEY` | Required to generate replies |
 | `XAI_MODEL` | Default `grok-4.3` |
 | `XAI_REASONING_EFFORT` | Default `low` |
 | `KAGI_API_KEY` | Required only when someone uses Web |
 | `KAGI_EXTRACT_COUNT` | Default `3` (0–10) |
+| `SIGNUP_ENABLED` | Public signup form. Turn off after the first account |
+| `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |
+| `KURA_HOST` | Public hostname. Share links use this |
+| `BIND` | Default `127.0.0.1:3000` |

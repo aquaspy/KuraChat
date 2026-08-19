@@ -10,11 +10,13 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_19_120002) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_19_140000) do
   create_table "conversations", force: :cascade do |t|
     t.datetime "archived_at"
     t.datetime "created_at", null: false
     t.string "share_token"
+    t.integer "summarized_through_id"
+    t.text "summary"
     t.string "title", default: "", null: false
     t.datetime "updated_at", null: false
     t.integer "user_id", null: false

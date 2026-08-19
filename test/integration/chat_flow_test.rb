@@ -51,6 +51,18 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     assert_equal 1, chat.messages.where(role: "user").count
   end
 
+  test "delete all removes only the current users chats" do
+    keep = @other.conversations.create!(title: "Theirs")
+    mine = @user.conversations.create!(title: "Mine")
+    mine.messages.create!(role: "user", content: "secret")
+
+    delete destroy_all_conversations_path
+    assert_redirected_to conversations_path
+    assert_not Conversation.exists?(mine.id)
+    assert_not Message.exists?(conversation_id: mine.id)
+    assert Conversation.exists?(keep.id)
+  end
+
   test "search filters titles" do
     @user.conversations.create!(title: "Garden")
     @user.conversations.create!(title: "Taxes")

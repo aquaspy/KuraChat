@@ -14,6 +14,7 @@ Rails.application.routes.draw do
   post "lock", to: "locks#lock", as: :lock
 
   resources :conversations, only: %i[index show create update destroy] do
+    collection { delete :destroy_all }
     resource :share, only: %i[create update destroy]
     resources :messages, only: %i[create] do
       post :retry, on: :member

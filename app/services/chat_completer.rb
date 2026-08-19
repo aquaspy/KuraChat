@@ -7,7 +7,8 @@ class ChatCompleter
   FLUSH_EVERY = 0.25
   FLUSH_CHARS = 80
   WINDOW_MESSAGES = Integer(ENV.fetch("CHAT_WINDOW_MESSAGES", "40"))
-  WINDOW_TOKENS   = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "32000"))
+  WINDOW_TOKENS   = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "12000"))
+  KEEP_RECENT     = Integer(ENV.fetch("CHAT_KEEP_RECENT", "16"))
 
   WEB_SEARCH_TOOL = {
     type: "function",
@@ -70,7 +71,7 @@ class ChatCompleter
       checkout { flush!(acc) }
 
       if acc.tool_calls.empty? || finish == "stop"
-        checkout { html_complete!(citations); auto_title! }
+        checkout { html_complete!(citations); auto_title!; maybe_compact! }
         break
       end
 
@@ -95,11 +96,16 @@ class ChatCompleter
   end
 
   def windowed_messages
-    rows = @conversation.messages.chronological.where.not(id: @assistant.id).to_a
+    through = @conversation.summarized_through_id
+    rows = @conversation.messages.chronological.where.not(id: @assistant.id)
+    rows = rows.where("id > ?", through) if through.present?
+    rows = rows.to_a
+    compact_before = @user_message&.id
     picked = []
-    est = token_estimate(system_prompt)
+    prompt = assembled_system_prompt
+    est = token_estimate(prompt)
     group_history(rows).reverse_each do |group|
-      payloads = group.filter_map(&:as_openai)
+      payloads = group.filter_map { |message| message.as_openai(compact_tools_before: compact_before) }
       next if payloads.empty?
       next unless legal_tool_group?(group, payloads)
 
@@ -109,7 +115,7 @@ class ChatCompleter
       picked.unshift(*payloads)
       est += cost
     end
-    [ { role: "system", content: system_prompt }, *picked ]
+    [ { role: "system", content: prompt }, *picked ]
   end
 
   def group_history(rows)
@@ -165,6 +171,50 @@ class ChatCompleter
       prompt = I18n.t("chat.system_prompt", locale: @locale, ui_locale: @locale)
       prompt += "\n#{I18n.t("chat.system_no_web", locale: @locale)}" unless web?
       prompt
+    end
+
+    def assembled_system_prompt
+      prompt = system_prompt
+      if @conversation.summary.present?
+        prompt = "#{prompt}\n\nEarlier conversation summary:\n#{@conversation.summary}"
+      end
+      prompt
+    end
+
+    def maybe_compact!
+      visible = @conversation.messages.transcript.chronological.where("id < ?", @assistant.id).to_a
+      return if visible.size <= KEEP_RECENT
+
+      cutoff = visible.last(KEEP_RECENT).first.id
+      older = visible.select { |message| message.id < cutoff }
+      through = @conversation.summarized_through_id
+      older = older.select { |message| through.nil? || message.id > through }
+      excerpt = older.filter_map { |message|
+        next if message.content.blank?
+
+        "#{message.role}: #{message.content.to_s.truncate(500)}"
+      }.join("\n")
+      return if excerpt.blank?
+
+      prior = @conversation.summary.to_s.strip
+      body = +""
+      body << "Previous summary:\n#{prior}\n\n" if prior.present?
+      body << "New messages:\n#{excerpt}"
+
+      response = xai.chat(
+        messages: [
+          { role: "system", content: "Summarize this conversation excerpt in at most 120 words. Keep facts, names, decisions, and open questions. Same language as the messages. No preamble." },
+          { role: "user", content: body.truncate(12_000) }
+        ],
+        max_tokens: 180,
+        reasoning_effort: "none"
+      )
+      text = response.dig("choices", 0, "message", "content").to_s.strip
+      return if text.blank?
+
+      @conversation.update!(summary: text, summarized_through_id: older.last.id)
+    rescue Xai::Error, Xai::TimeoutError
+      nil
     end
 
     def token_estimate(str)

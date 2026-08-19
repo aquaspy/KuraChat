@@ -79,6 +79,49 @@ class ChatCompleterTest < ActiveSupport::TestCase
     refute payload.any? { |m| m[:role] == "assistant" && m[:content] == "" && m[:tool_calls].blank? }
   end
 
+  test "compacts older turns into a stored summary" do
+    18.times do |i|
+      @chat.messages.create!(role: "user", content: "Question #{i} about taxes")
+      @chat.messages.create!(role: "assistant", status: "complete", content: "Answer #{i} about taxes")
+    end
+    user = @chat.messages.create!(role: "user", content: "And now?")
+    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+    xai = FakeXai.new(
+      chunks: [ { "choices" => [ { "delta" => { "content" => "Later." }, "finish_reason" => "stop" } ] } ],
+      title: "People discussed taxes and later asked a follow-up."
+    )
+    ChatCompleter.new(assistant, xai: xai).run
+    @chat.reload
+    assert_predicate @chat.summary, :present?
+    assert @chat.summarized_through_id.present?
+    assert @chat.summarized_through_id < user.id
+
+    payload = ChatCompleter.new(assistant, xai: xai).windowed_messages
+    system = payload.first[:content]
+    assert_match(/Earlier conversation summary/, system)
+    refute payload.any? { |m| m[:content].to_s.include?("Question 0 about taxes") }
+  end
+
+  test "historical tool extracts are stripped for later turns" do
+    early_user = @chat.messages.create!(role: "user", content: "search", web: true)
+    @chat.messages.create!(
+      role: "assistant", status: "complete", content: nil,
+      raw: { "tool_calls" => [ { "id" => "c1", "type" => "function", "function" => { "name" => "web_search", "arguments" => "{}" } } ] }
+    )
+    fat = { "query" => "news", "results" => [ { "title" => "A", "url" => "https://a.example", "snippet" => "x" * 1500 } ] }.to_json
+    @chat.messages.create!(role: "tool", content: fat, raw: { "tool_call_id" => "c1" })
+    @chat.messages.create!(role: "assistant", status: "complete", content: "Found it.")
+    later = @chat.messages.create!(role: "user", content: "thanks")
+    current = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+    payload = ChatCompleter.new(current).windowed_messages
+    tool = payload.find { |m| m[:role] == "tool" }
+    assert tool
+    parsed = JSON.parse(tool[:content])
+    assert_equal "A", parsed["results"][0]["title"]
+    assert_nil parsed["results"][0]["snippet"]
+    assert early_user && later
+  end
+
   test "window drops a split tool group" do
     @chat.messages.create!(role: "user", content: "a")
     @chat.messages.create!(

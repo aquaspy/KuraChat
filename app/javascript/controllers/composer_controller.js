@@ -29,6 +29,14 @@ export default class extends Controller {
     this.inputTarget.style.height = `${Math.min(this.inputTarget.scrollHeight, 180)}px`
   }
 
+  sent(event) {
+    if (event.detail?.success === false) return
+    if (!this.hasInputTarget) return
+    this.inputTarget.value = ""
+    this.inputTarget.style.height = ""
+    this.inputTarget.focus()
+  }
+
   streamingValueChanged() {
     this.sync()
   }

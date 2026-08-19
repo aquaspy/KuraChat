@@ -327,7 +327,14 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 .btn-new svg { width: 0.95rem; height: 0.95rem; display: block; }
 .btn-new:hover { filter: brightness(1.06); }
 
-.note-list { overflow: auto; padding: 0.2rem 0.35rem 1rem; }
+.note-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.2rem 0.35rem 1rem;
+  scrollbar-width: none;
+}
+.note-list::-webkit-scrollbar { display: none; }
 .note-item {
   flex-direction: row;
   align-items: center;
@@ -546,7 +553,9 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   display: grid;
   align-content: start;
   gap: 0.85rem;
+  scrollbar-width: none;
 }
+.transcript::-webkit-scrollbar { display: none; }
 
 .msg {
   max-width: 42rem;
@@ -617,16 +626,54 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   font: inherit;
 }
 .composer .btn-primary { padding: 0.55rem 0.85rem; }
-.web-toggle {
-  display: flex;
+.web-switch {
+  display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.78rem;
+  gap: 0.4rem;
+  flex: none;
+  height: 2.6rem;
+  padding: 0 0.5rem 0 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--input);
   color: var(--muted);
   cursor: pointer;
   user-select: none;
+  font-size: 0.82rem;
+  font-weight: 550;
+  touch-action: manipulation;
 }
-.web-toggle input { accent-color: var(--accent); }
+.web-switch svg { width: 1rem; height: 1rem; display: block; flex: none; }
+.web-switch-label { line-height: 1; }
+.web-switch:hover { color: var(--ink); }
+.web-switch:has(input:focus-visible) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.web-switch:has(input:checked) {
+  background: var(--highlight);
+  border-color: transparent;
+  color: var(--accent-2);
+}
+.web-switch-track {
+  position: relative;
+  width: 1.75rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: var(--line);
+  flex: none;
+}
+.web-switch:has(input:checked) .web-switch-track { background: var(--accent); }
+.web-switch-knob {
+  position: absolute;
+  top: 0.12rem;
+  left: 0.12rem;
+  width: 0.76rem;
+  height: 0.76rem;
+  border-radius: 50%;
+  background: #fff8f2;
+  transition: transform 0.16s ease;
+}
+.web-switch:has(input:checked) .web-switch-knob { transform: translateX(0.74rem); }
 .title-form { flex: 1; min-width: 0; margin: 0; }
 .offline-banner {
   grid-column: 1 / -1;
@@ -819,6 +866,8 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   .app-shell.is-editing .col-list,
   .app-shell.is-editing .fab { display: none; }
   .composer { padding-bottom: max(0.9rem, env(safe-area-inset-bottom)); }
+  .web-switch { padding: 0 0.4rem 0 0.5rem; height: 2.75rem; }
+  .web-switch-label { font-size: 0.8rem; }
 
   .confirm-dialog {
     margin-top: 22dvh;

@@ -29,6 +29,14 @@ class ConversationsController < ApplicationController
     redirect_to conversations_path, notice: t("chat.deleted")
   end
 
+  def destroy_all
+    ids = current_user.conversation_ids
+    Message.where(conversation_id: ids).delete_all
+    current_user.conversations.delete_all
+    Conversation.reclaim_space
+    redirect_to conversations_path, notice: t("chat.deleted_all")
+  end
+
   private
     def set_conversation
       @conversation = current_user.conversations.find(params[:id])
