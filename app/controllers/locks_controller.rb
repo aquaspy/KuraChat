@@ -1,5 +1,5 @@
 class LocksController < ApplicationController
-  skip_unlock
+  skip_unlock only: %i[show create lock]
   rate_limit to: 20, within: 3.minutes, only: :create,
     with: -> { redirect_to unlock_path, alert: I18n.t("auth.too_many") }
 
@@ -19,5 +19,10 @@ class LocksController < ApplicationController
   def lock
     lock_session
     redirect_to unlock_path
+  end
+
+  def toggle_auto_lock
+    current_user.update!(auto_lock: !current_user.auto_lock?)
+    redirect_back fallback_location: root_path
   end
 end

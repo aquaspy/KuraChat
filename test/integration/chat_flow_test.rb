@@ -14,15 +14,66 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     chat = @user.conversations.last
     assert_redirected_to conversation_path(chat)
 
-    get conversations_path
-    assert_response :success
-
     patch conversation_path(chat), params: { conversation: { title: "Taxes" } }
     assert_equal "Taxes", chat.reload.title
+
+    get conversations_path
+    assert_response :success
+    assert_includes @response.body, "Taxes"
 
     delete conversation_path(chat)
     assert_redirected_to conversations_path
     assert_not Conversation.exists?(chat.id)
+  end
+
+  test "new chat reuses an empty untitled draft" do
+    post conversations_path
+    first = @user.conversations.last
+    post conversations_path
+    assert_redirected_to conversation_path(first)
+    assert_equal 1, @user.conversations.count
+  end
+
+  test "new chat opens a fresh conversation after a message" do
+    post conversations_path
+    first = @user.conversations.last
+    first.messages.create!(role: "user", content: "Hi")
+    post conversations_path
+    assert_equal 2, @user.conversations.count
+    assert_not_equal first.id, @user.conversations.order(:id).last.id
+  end
+
+  test "new chat does not reuse a named empty conversation" do
+    named = @user.conversations.create!(title: "Notes")
+    post conversations_path
+    assert_not_equal named.id, @user.conversations.order(:id).last.id
+    assert_equal 2, @user.conversations.count
+  end
+
+  test "leaving an empty chat discards the untitled draft" do
+    post conversations_path
+    draft = @user.conversations.last
+    get conversations_path
+    assert_not Conversation.exists?(draft.id)
+  end
+
+  test "opening another chat discards an abandoned untitled draft" do
+    keep = @user.conversations.create!(title: "Keep")
+    keep.messages.create!(role: "user", content: "hello")
+    post conversations_path
+    draft = @user.conversations.where.not(id: keep.id).last
+    get conversation_path(keep)
+    assert_not Conversation.exists?(draft.id)
+    assert Conversation.exists?(keep.id)
+  end
+
+  test "portuguese locale labels a blank title as Sem título" do
+    post conversations_path
+    chat = @user.conversations.last
+    get conversation_path(chat), headers: { "HTTP_ACCEPT_LANGUAGE" => "pt-BR,pt;q=0.9" }
+    assert_response :success
+    assert_includes @response.body, "Sem título"
+    assert_not_includes @response.body, "Untitled"
   end
 
   test "stranger cannot open another users chat" do

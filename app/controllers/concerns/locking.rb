@@ -3,6 +3,15 @@ module Locking
 
   IDLE_AFTER = 15.minutes
 
+  def self.session_open?(session, user)
+    raw = session[:unlocked_at]
+    return false if raw.blank?
+    return true unless user&.auto_lock?
+
+    at = raw.is_a?(String) ? Time.zone.parse(raw) : raw
+    at > IDLE_AFTER.ago
+  end
+
   included do
     before_action :require_unlock
     helper_method :unlocked?
@@ -16,7 +25,7 @@ module Locking
 
   private
     def unlocked?
-      session[:unlocked_at].present? && session[:unlocked_at] > IDLE_AFTER.ago
+      Locking.session_open?(session, current_user)
     end
 
     def require_unlock

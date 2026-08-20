@@ -5,6 +5,7 @@ pt:
     app: "KuraChat"
     login: "Entrar · KuraChat"
     signup: "Criar conta · KuraChat"
+    password: "Mudar senha · KuraChat"
     lock: "Desbloquear · KuraChat"
     shared: "%{title} · KuraChat"
   auth:
@@ -13,6 +14,12 @@ pt:
     email: "Email"
     password: "Senha"
     confirm_password: "Confirmar senha"
+    current_password: "Senha atual"
+    new_password: "Nova senha"
+    confirm_new_password: "Confirmar nova senha"
+    change_password: "Mudar senha"
+    change_password_lede: "A senha nova vale para entrar e para desbloquear o app."
+    password_changed: "Senha alterada."
     no_account: "Sem conta?"
     create_one: "Criar uma"
     create_account: "Criar conta"
@@ -25,6 +32,8 @@ pt:
     unlock: "Desbloquear"
     unlock_lede: "Conectado como %{email}. Digite a senha para ver os chats."
     lock: "Bloquear"
+    auto_lock_on: "Ligar bloqueio automático"
+    auto_lock_off: "Desligar bloqueio automático"
     sign_out: "Sair"
     cancel: "Cancelar"
     delete: "Apagar"
@@ -82,3 +91,17 @@ pt:
     theme_dark: "Tema: escuro"
     theme_switch: "clique para alternar"
     copied: "Copiado"
+  activerecord:
+    attributes:
+      user:
+        password: "Senha"
+        password_confirmation: "Confirmação da senha"
+    errors:
+      models:
+        user:
+          attributes:
+            password:
+              too_short: "é muito curta (mínimo de %{count} caracteres)"
+              blank: "não pode ficar em branco"
+            password_confirmation:
+              confirmation: "não confere com a senha"

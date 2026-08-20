@@ -35,4 +35,96 @@ class AuthFlowTest < ActionDispatch::IntegrationTest
     get login_path, headers: { "Accept-Language" => "pt-BR,pt;q=0.9" }
     assert_includes @response.body, "Entrar"
   end
+
+  test "auto lock is off by default and can be toggled" do
+    user = User.create!(email: "lock@x.com", password: "secret-ok")
+    post login_path, params: { email: user.email, password: "secret-ok" }
+    assert_not user.reload.auto_lock?
+
+    get root_path
+    assert_includes @response.body, "Turn on auto lock"
+    assert_not_includes @response.body, "Turn off auto lock"
+
+    travel 20.minutes do
+      get root_path
+      assert_response :success
+    end
+
+    post auto_lock_path
+    follow_redirect!
+    assert user.reload.auto_lock?
+    assert_includes @response.body, "Turn off auto lock"
+
+    travel 20.minutes do
+      get root_path
+      assert_redirected_to unlock_path
+    end
+  end
+
+  test "auto lock cannot be toggled while locked" do
+    user = User.create!(email: "locked@x.com", password: "secret-ok")
+    post login_path, params: { email: user.email, password: "secret-ok" }
+    post lock_path
+    post auto_lock_path
+    assert_redirected_to unlock_path
+    assert_not user.reload.auto_lock?
+  end
+
+  test "portuguese auto lock labels" do
+    user = User.create!(email: "ptlock@x.com", password: "secret-ok")
+    post login_path, params: { email: user.email, password: "secret-ok" }
+    get root_path, headers: { "Accept-Language" => "pt-BR,pt;q=0.9" }
+    assert_includes @response.body, "Ligar bloqueio automático"
+  end
+
+  test "logged in user can change password" do
+    user = User.create!(email: "pw@x.com", password: "secret-ok")
+    post login_path, params: { email: user.email, password: "secret-ok" }
+
+    get root_path
+    assert_includes @response.body, "Change password"
+
+    get edit_password_path
+    assert_response :success
+    assert_includes @response.body, "Current password"
+
+    patch password_path, params: { current_password: "wrong-pass", password: "new-secret", password_confirmation: "new-secret" }
+    assert_response :unprocessable_entity
+    assert user.reload.authenticate("secret-ok")
+
+    patch password_path, params: { current_password: "secret-ok", password: "new-secret", password_confirmation: "mismatch!" }
+    assert_response :unprocessable_entity
+    assert user.reload.authenticate("secret-ok")
+
+    patch password_path, params: { current_password: "secret-ok", password: "short", password_confirmation: "short" }
+    assert_response :unprocessable_entity
+    assert user.reload.authenticate("secret-ok")
+
+    patch password_path, params: { current_password: "secret-ok", password: "new-secret", password_confirmation: "new-secret" }
+    assert_redirected_to root_path
+    follow_redirect!
+    assert_includes @response.body, "Password changed."
+    assert user.reload.authenticate("new-secret")
+    assert_not user.authenticate("secret-ok")
+
+    delete logout_path
+    post login_path, params: { email: user.email, password: "secret-ok" }
+    assert_response :unprocessable_entity
+    post login_path, params: { email: user.email, password: "new-secret" }
+    assert_redirected_to root_path
+  end
+
+  test "change password requires a session" do
+    get edit_password_path
+    assert_redirected_to login_path
+  end
+
+  test "portuguese change password labels" do
+    user = User.create!(email: "ptpw@x.com", password: "secret-ok")
+    post login_path, params: { email: user.email, password: "secret-ok" }
+    get edit_password_path, headers: { "Accept-Language" => "pt-BR,pt;q=0.9" }
+    assert_includes @response.body, "Mudar senha"
+    assert_includes @response.body, "Senha atual"
+    assert_not_includes @response.body, "Change password"
+  end
 end

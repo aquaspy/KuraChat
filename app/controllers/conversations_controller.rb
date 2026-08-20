@@ -11,8 +11,7 @@ class ConversationsController < ApplicationController
   end
 
   def create
-    conversation = current_user.conversations.create!
-    redirect_to conversation
+    redirect_to Conversation.open_draft_for(current_user)
   end
 
   def update
@@ -43,6 +42,10 @@ class ConversationsController < ApplicationController
     end
 
     def load_list
+      abandoned = current_user.conversations.blank_drafts
+      abandoned = abandoned.where.not(id: @conversation.id) if @conversation
+      abandoned.delete_all
+
       @query = params[:q].to_s.strip
       scope = current_user.conversations.order(updated_at: :desc)
       scope = scope.where("title LIKE ?", "%#{Conversation.sanitize_sql_like(@query)}%") if @query.present?

@@ -1,0 +1,25 @@
+<% content_for :title, t("titles.password") %>
+<% content_for :body_class, "auth-body" %>
+
+<section class="auth-card">
+  <%= render "shared/wordmark" %>
+  <h1><%= t("auth.change_password") %></h1>
+  <p class="lede"><%= t("auth.change_password_lede") %></p>
+
+  <%= form_with url: password_path, method: :patch, class: "auth-form" do %>
+    <% if alert %><p class="error"><%= alert %></p><% end %>
+    <label><%= t("auth.current_password") %>
+      <%= password_field_tag :current_password, nil, autocomplete: "current-password", required: true, minlength: 8, autofocus: true %>
+    </label>
+    <label><%= t("auth.new_password") %>
+      <%= password_field_tag :password, nil, autocomplete: "new-password", required: true, minlength: 8 %>
+    </label>
+    <label><%= t("auth.confirm_new_password") %>
+      <%= password_field_tag :password_confirmation, nil, autocomplete: "new-password", required: true, minlength: 8 %>
+    </label>
+    <%= submit_tag t("auth.change_password"), class: "btn-primary" %>
+  <% end %>
+
+  <p class="auth-foot"><%= link_to t("app.cancel"), root_path %></p>
+  <%= render "shared/theme_switch" %>
+</section>

@@ -2,6 +2,15 @@ class Conversation < ApplicationRecord
   belongs_to :user
   has_many :messages, dependent: :delete_all
 
+  scope :blank_drafts, -> { where(title: "").where(share_token: nil).where.missing(:messages) }
+
+  def self.open_draft_for(user)
+    drafts = user.conversations.blank_drafts
+    draft = drafts.order(updated_at: :desc).first || user.conversations.create!
+    drafts.where.not(id: draft.id).delete_all
+    draft
+  end
+
   def untitled?
     title.blank?
   end

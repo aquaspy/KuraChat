@@ -1,0 +1,4 @@
+<%= button_to auto_lock_path, method: :post, class: "btn-io" do %>
+  <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 5.2v3.1l2.1 1.3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <span><%= current_user.auto_lock? ? t("app.auto_lock_off") : t("app.auto_lock_on") %></span>
+<% end %>

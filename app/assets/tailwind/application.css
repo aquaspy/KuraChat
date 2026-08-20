@@ -392,6 +392,7 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   align-items: center;
   padding: 0.4rem 0.55rem;
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
 }
 
 .icon-btn {
@@ -548,6 +549,7 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 
 .transcript {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 1rem 1.1rem 1.4rem;
   display: grid;
@@ -612,6 +614,8 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   padding: 0.65rem 0.8rem 0.9rem;
   border-top: 1px solid var(--line);
   background: var(--paper);
+  flex-shrink: 0;
+  margin-top: auto;
 }
 .composer textarea {
   flex: 1;
@@ -699,7 +703,7 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
     height: var(--vvh, 100dvh);
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
@@ -859,8 +863,10 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   .mobile-menu svg { width: 0.95rem; height: 0.95rem; flex: none; color: var(--accent-2); }
 
   .app-shell:not(.is-editing) .col-editor { display: none; }
-  .app-shell.is-editing {
-    grid-template-rows: auto 1fr;
+  .app-shell:not(.is-editing) .col-list,
+  .app-shell.is-editing .col-editor {
+    grid-row: 2;
+    min-height: 0;
   }
   .app-shell.is-editing .mobile-top,
   .app-shell.is-editing .col-list,
@@ -868,6 +874,8 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   .composer { padding-bottom: max(0.9rem, env(safe-area-inset-bottom)); }
   .web-switch { padding: 0 0.4rem 0 0.5rem; height: 2.75rem; }
   .web-switch-label { font-size: 0.8rem; }
+
+  .flash { top: 3.6rem; }
 
   .confirm-dialog {
     margin-top: 22dvh;
