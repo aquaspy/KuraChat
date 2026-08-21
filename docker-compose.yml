@@ -9,6 +9,7 @@ services:
       RAILS_ENV: production
       SOLID_QUEUE_IN_PUMA: "true"
       DB_POOL: "10"
+      RUBY_YJIT_ENABLE: "1"
     volumes:
       - kura_chat_data:/rails/storage
     healthcheck:
