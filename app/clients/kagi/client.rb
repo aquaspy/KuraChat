@@ -2,8 +2,8 @@ require "net/http"
 require "json"
 
 module Kagi
-  class Error < StandardError; end
-  class TimeoutError < Error; end
+  class Error < WebSearch::Error; end
+  class TimeoutError < WebSearch::TimeoutError; end
 
   class Client
     BASE = URI("https://kagi.com/api/v1")

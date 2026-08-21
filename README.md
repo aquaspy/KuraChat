@@ -1,15 +1,17 @@
 # KuraChat
 
-Private self-hosted chat as a Rails 8 PWA. One SQLite file, no Redis. Grok for replies. Optional Kagi search.
+Private self-hosted chat as a Rails 8 PWA. One SQLite file, no Redis. Grok for replies. Optional web search (Kagi or Brave).
 
-Messages are stored in plaintext SQLite on this server. They are sent to xAI to generate replies. If you turn **Web** on, the search query and extracted pages go to Kagi. A share link lets anyone with the URL read that chat (no account). API keys stay on the server. This is not end-to-end encryption.
+Messages are stored in plaintext SQLite on this server. They are sent to xAI to generate replies. If you turn **Web** on, the search query goes to the search provider configured on the server (Kagi or Brave). A share link lets anyone with the URL read that chat (no account). API keys stay on the server. This is not end-to-end encryption.
 
 ## Local
 
 ```bash
 bin/setup
 export XAI_API_KEY=...          # required to generate replies
-export KAGI_API_KEY=...         # optional; only for the Web toggle
+export KAGI_API_KEY=...         # optional; Web toggle with Kagi (default)
+# export WEB_SEARCH_PROVIDER=brave
+# export BRAVE_API_KEY=...      # optional; Web toggle with Brave instead
 bin/dev
 ```
 
@@ -40,7 +42,9 @@ Edit `.env`. At minimum set:
 SECRET_KEY_BASE=$(openssl rand -hex 64)   # paste the output into .env
 KURA_HOST=chat.example.com
 XAI_API_KEY=xai-...                       # from https://console.x.ai
-# KAGI_API_KEY=...                        # optional, for Web search
+# WEB_SEARCH_PROVIDER=kagi                # kagi (default) or brave
+# KAGI_API_KEY=...                        # optional, for Web search with Kagi
+# BRAVE_API_KEY=...                       # optional, for Web search with Brave
 SIGNUP_ENABLED=true                       # first account, then false
 FORCE_SSL=false                           # true once Caddy/nginx terminates HTTPS
 BIND=127.0.0.1:3000
@@ -150,11 +154,13 @@ Shared browsers: Sign out **and** wait for the cache wipe. Until then another pe
 
 ### Cost
 
-A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds Kagi Search ($12 / 1k) plus up to 3 page extracts ($4 / 1k pages), about $0.024 extra. The toggle defaults off.
+A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds a search call. With **Kagi** that is Search ($12 / 1k) plus up to 3 page extracts ($4 / 1k pages), about $0.024 extra. With **Brave** it is one Search request (plans start around $5 / 1k, with $5 of monthly credit). The toggle defaults off.
 
-Long chats are compacted automatically: Grok only sees the last 16 visible messages plus a short rolling summary. Old Kagi extracts are not resent on later turns. The full transcript stays in SQLite.
+Long chats are compacted automatically: Grok only sees the last 16 visible messages plus a short rolling summary. Old search extracts are not resent on later turns. The full transcript stays in SQLite.
 
-Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Web turns.
+The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns.
+
+Offline, the PWA can reopen the home page and any chat you already opened while online. Sending stays disabled until you are back online.
 
 ## Keys
 
@@ -164,8 +170,10 @@ Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Web turns.
 | `XAI_API_KEY` | Required to generate replies |
 | `XAI_MODEL` | Default `grok-4.3` |
 | `XAI_REASONING_EFFORT` | Default `low` |
-| `KAGI_API_KEY` | Required only when someone uses Web |
-| `KAGI_EXTRACT_COUNT` | Default `3` (0–10) |
+| `WEB_SEARCH_PROVIDER` | `kagi` (default) or `brave` |
+| `KAGI_API_KEY` | Required for Web when the provider is Kagi |
+| `KAGI_EXTRACT_COUNT` | Default `3` (0–10). Kagi only |
+| `BRAVE_API_KEY` | Required for Web when the provider is Brave |
 | `SIGNUP_ENABLED` | Public signup form. Turn off after the first account |
 | `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |
 | `KURA_HOST` | Public hostname. Share links use this |

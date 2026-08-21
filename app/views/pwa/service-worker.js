@@ -1,4 +1,4 @@
-const CACHE = "kurachat-v1"
+const CACHE = "kurachat-v2"
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(["/icon.svg"])))
@@ -18,6 +18,15 @@ self.addEventListener("message", (event) => {
   }
 })
 
+function cacheKey(request) {
+  const url = new URL(request.url)
+  if (/^\/conversations\/[^/]+/.test(url.pathname)) url.searchParams.delete("q")
+  for (const [key, value] of [...url.searchParams.entries()]) {
+    if (value === "") url.searchParams.delete(key)
+  }
+  return url.pathname + url.search
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request
   if (request.method !== "GET") return
@@ -25,18 +34,30 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
   if (url.pathname.startsWith("/s/")) return
+  if (url.pathname === "/cable" || url.pathname.startsWith("/cable/")) return
+  if (url.pathname === "/up" || url.pathname === "/service-worker") return
+
+  const key = cacheKey(request)
 
   event.respondWith((async () => {
     try {
       const fresh = await fetch(request)
       if (fresh.ok) {
         const cache = await caches.open(CACHE)
-        cache.put(request, fresh.clone())
+        cache.put(key, fresh.clone())
       }
       return fresh
     } catch {
-      const cached = await caches.match(request)
-      return cached || caches.match("/")
+      const cache = await caches.open(CACHE)
+      const cached = await cache.match(key)
+      if (cached) return cached
+      if (request.mode === "navigate" || (request.headers.get("Accept") || "").includes("text/html")) {
+        return new Response(
+          `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>KuraChat</title><p>Offline. <a href="/">KuraChat</a></p>`,
+          { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+        )
+      }
+      return Response.error()
     }
   })())
 })

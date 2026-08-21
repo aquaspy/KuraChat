@@ -54,7 +54,7 @@ en:
     placeholder: "Message…"
     send: "Send"
     web: "Web"
-    web_hint: "Search the web with Kagi for this message"
+    web_hint: "Search the web for this message"
     thinking: "Thinking…"
     searching: "Searching the web…"
     offline: "You're offline. You can read, but not send."

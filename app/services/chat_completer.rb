@@ -14,7 +14,7 @@ class ChatCompleter
     type: "function",
     function: {
       name: "web_search",
-      description: "Search the live web with Kagi. Use for current events, prices, news, or facts that may have changed. Prefer one precise query. Do not search for general knowledge you already know.",
+      description: "Search the live web. Use for current events, prices, news, or facts that may have changed. Prefer one precise query. Do not search for general knowledge you already know.",
       parameters: {
         type: "object",
         properties: {
@@ -34,14 +34,14 @@ class ChatCompleter
     new(message, locale: I18n.locale).broadcast_failed
   end
 
-  def initialize(assistant_message, locale: I18n.default_locale, xai: nil, kagi: nil)
+  def initialize(assistant_message, locale: I18n.default_locale, xai: nil, search: nil, kagi: nil)
     @assistant = assistant_message
     @conversation = assistant_message.conversation
     @locale = locale
     @user_message = @conversation.messages.where(role: "user").where("id < ?", @assistant.id).last
     @searches = 0
     @xai = xai
-    @kagi = kagi
+    @search = search || kagi
   end
 
   def run
@@ -225,8 +225,8 @@ class ChatCompleter
       @xai ||= Xai::Client.new
     end
 
-    def kagi
-      @kagi ||= Kagi::Client.new
+    def search_client
+      @search ||= WebSearch.client
     end
 
     def gone?
@@ -336,10 +336,10 @@ class ChatCompleter
       @searches += 1
       query = args["query"].to_s
       recency = args["recency"]
-      results = with_heartbeat { kagi.search(query: query, recency: recency) }
+      results = with_heartbeat { search_client.search(query: query, recency: recency) }
       cites = results.map { |r| { "title" => r[:title], "url" => r[:url] } }
       [ { "query" => query, "results" => results }, cites ]
-    rescue Kagi::Error, JSON::ParserError
+    rescue WebSearch::Error, JSON::ParserError
       [ { "error" => "search_failed" }, [] ]
     end
 
