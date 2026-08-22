@@ -42,13 +42,17 @@ class ChatCompleterTest < ActiveSupport::TestCase
     assert user
   end
 
-  test "web turn persists hidden tool rows and a legal window" do
-    @chat.messages.create!(role: "user", content: "News?", web: true)
-    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+  class RecordingXai
+    attr_reader :tool_choices
 
-    xai = Object.new
-    def xai.stream_chat(**)
-      @n = (@n || 0) + 1
+    def initialize
+      @tool_choices = []
+      @n = 0
+    end
+
+    def stream_chat(tool_choice: nil, **)
+      @tool_choices << tool_choice
+      @n += 1
       chunks = if @n == 1
         [ { "choices" => [ { "delta" => { "tool_calls" => [ {
           "index" => 0, "id" => "call_1", "type" => "function",
@@ -59,10 +63,17 @@ class ChatCompleterTest < ActiveSupport::TestCase
       end
       chunks.each { |c| yield c }
     end
-    def xai.chat(**)
+
+    def chat(**)
       { "choices" => [ { "message" => { "content" => "News" } } ] }
     end
+  end
 
+  test "web turn persists hidden tool rows and a legal window" do
+    @chat.messages.create!(role: "user", content: "News?", web: true)
+    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+
+    xai = RecordingXai.new
     ChatCompleter.new(assistant, xai: xai, kagi: FakeKagi.new).run
     assistant.reload
     assert_equal "complete", assistant.status
@@ -77,6 +88,16 @@ class ChatCompleterTest < ActiveSupport::TestCase
     assert_includes roles, "tool"
     assert payload.any? { |m| m[:tool_calls] }
     refute payload.any? { |m| m[:role] == "assistant" && m[:content] == "" && m[:tool_calls].blank? }
+    assert_equal %w[required auto], xai.tool_choices
+  end
+
+  test "web turn system prompt tells the model to search" do
+    @chat.messages.create!(role: "user", content: "News?", web: true)
+    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+    payload = ChatCompleter.new(assistant, xai: FakeXai.new(chunks: [])).windowed_messages
+    assert_match(/live web access this turn/i, payload.first[:content])
+    refute_match(/no live web access/i, payload.first[:content])
+    refute_match(/Do not search for general knowledge/i, ChatCompleter::WEB_SEARCH_TOOL.dig(:function, :description))
   end
 
   test "compacts older turns into a stored summary" do

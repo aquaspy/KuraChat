@@ -1,24 +1,32 @@
 require "test_helper"
 
 class BraveClientTest < ActiveSupport::TestCase
-  test "maps web results including extra snippets" do
+  test "maps llm context grounding including source dates" do
     rows = Brave::Client.normalize({
-      "web" => {
-        "results" => [
+      "grounding" => {
+        "generic" => [
           {
-            "title" => "Hello",
             "url" => "https://example.com/a",
-            "description" => "World",
-            "age" => "2024-01-01T00:00:00Z",
-            "extra_snippets" => [ "More context" ]
+            "title" => "Hello",
+            "snippets" => [ "World", "More context" ]
           },
           {
-            "title" => "Second",
             "url" => "https://example.com/b",
-            "description" => "Only desc",
-            "page_age" => "2023-12-01"
+            "title" => "Second",
+            "snippets" => []
           }
         ]
+      },
+      "sources" => {
+        "https://example.com/a" => {
+          "title" => "Hello",
+          "age" => [ "Monday, January 1, 2024", "2024-01-01", "2 years ago", "2024-01-01T00:00:00Z" ]
+        },
+        "https://example.com/b" => {
+          "title" => "Second",
+          "description" => "Only desc",
+          "age" => [ "December 1, 2023", "2023-12-01" ]
+        }
       }
     })
 
@@ -30,6 +38,57 @@ class BraveClientTest < ActiveSupport::TestCase
     assert_includes rows[0][:snippet], "More context"
     assert_equal "Only desc", rows[1][:snippet]
     assert_equal "2023-12-01", rows[1][:date]
+  end
+
+  test "includes poi and map rows when present" do
+    rows = Brave::Client.normalize({
+      "grounding" => {
+        "generic" => [],
+        "poi" => {
+          "url" => "https://cafe.example",
+          "title" => "Cafe",
+          "snippets" => [ "Coffee" ]
+        },
+        "map" => [
+          { "url" => "https://park.example", "title" => "Park", "snippets" => [ "Grass" ] }
+        ]
+      },
+      "sources" => {}
+    })
+
+    assert_equal [ "https://cafe.example", "https://park.example" ], rows.map { |r| r[:url] }
+    assert_equal "Coffee", rows[0][:snippet]
+  end
+
+  test "serializes structured snippets as json" do
+    rows = Brave::Client.normalize({
+      "grounding" => {
+        "generic" => [
+          {
+            "url" => "https://example.com/table",
+            "title" => "Stats",
+            "snippets" => [ "Intro", { "rows" => [ 1, 2 ] } ]
+          }
+        ]
+      }
+    })
+
+    assert_includes rows[0][:snippet], "Intro"
+    assert_includes rows[0][:snippet], "{\"rows\":[1,2]}"
+  end
+
+  test "skips rows without a url" do
+    rows = Brave::Client.normalize({
+      "grounding" => {
+        "generic" => [
+          { "title" => "Nope", "snippets" => [ "x" ] },
+          { "url" => "https://ok.example", "title" => "Ok", "snippets" => [ "y" ] }
+        ]
+      }
+    })
+
+    assert_equal 1, rows.size
+    assert_equal "https://ok.example", rows[0][:url]
   end
 
   test "maps recency to brave freshness values" do

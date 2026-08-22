@@ -154,11 +154,11 @@ Shared browsers: Sign out **and** wait for the cache wipe. Until then another pe
 
 ### Cost
 
-A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds a search call. With **Kagi** that is Search ($12 / 1k) plus up to 3 page extracts ($4 / 1k pages), about $0.024 extra. With **Brave** it is one Search request (plans start around $5 / 1k, with $5 of monthly credit). The toggle defaults off.
+A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds a search call. With **Kagi** that is Search ($12 / 1k) plus up to 3 page extracts ($4 / 1k pages), about $0.024 extra. With **Brave** it is one LLM Context request (search plus extracted page chunks; plans start around $5 / 1k, with $5 of monthly credit). The toggle defaults off.
 
 Long chats are compacted automatically: Grok only sees the last 16 visible messages plus a short rolling summary. Old search extracts are not resent on later turns. The full transcript stays in SQLite.
 
-The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns.
+The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns. Set `BRAVE_CONTEXT_TOKENS=2048` (or up to 8192) to size Brave's extracted context.
 
 Offline, the PWA can reopen the home page and any chat you already opened while online. Sending stays disabled until you are back online.
 
@@ -174,6 +174,7 @@ Offline, the PWA can reopen the home page and any chat you already opened while 
 | `KAGI_API_KEY` | Required for Web when the provider is Kagi |
 | `KAGI_EXTRACT_COUNT` | Default `3` (0–10). Kagi only |
 | `BRAVE_API_KEY` | Required for Web when the provider is Brave |
+| `BRAVE_CONTEXT_TOKENS` | Default `4096` (1024–32768). Brave only |
 | `SIGNUP_ENABLED` | Public signup form. Turn off after the first account |
 | `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |
 | `KURA_HOST` | Public hostname. Share links use this |

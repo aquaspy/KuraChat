@@ -14,7 +14,7 @@ class ChatCompleter
     type: "function",
     function: {
       name: "web_search",
-      description: "Search the live web. Use for current events, prices, news, or facts that may have changed. Prefer one precise query. Do not search for general knowledge you already know.",
+      description: "Search the live web and read extracted page content. Use for current events, prices, news, people, products, docs, or facts that may have changed. Prefer one precise query. Follow up only if the first results are insufficient.",
       parameters: {
         type: "object",
         properties: {
@@ -51,6 +51,7 @@ class ChatCompleter
     broadcast_status(web? ? I18n.t("chat.searching") : I18n.t("chat.thinking"))
 
     @tools = web? ? [ WEB_SEARCH_TOOL ] : nil
+    @tool_choice = web? ? "required" : nil
     citations = []
     rounds = 0
 
@@ -82,6 +83,7 @@ class ChatCompleter
           citations.concat(cites)
           persist_tool_result(tc, result)
         end
+        @tool_choice = "auto"
         broadcast_status(I18n.t("chat.searching"))
       end
     end
@@ -169,7 +171,8 @@ class ChatCompleter
 
     def system_prompt
       prompt = I18n.t("chat.system_prompt", locale: @locale, ui_locale: @locale)
-      prompt += "\n#{I18n.t("chat.system_no_web", locale: @locale)}" unless web?
+      key = web? ? "chat.system_web" : "chat.system_no_web"
+      prompt += "\n#{I18n.t(key, locale: @locale)}"
       prompt
     end
 
@@ -251,7 +254,7 @@ class ChatCompleter
         end
       end
       ActiveRecord::Base.connection_pool.release_connection
-      xai.stream_chat(messages: payload, tools: @tools, &block)
+      xai.stream_chat(messages: payload, tools: @tools, tool_choice: @tool_choice, &block)
     ensure
       stop = true
     end

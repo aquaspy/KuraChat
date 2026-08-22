@@ -14,13 +14,13 @@ module Xai
       raise Error, "missing_key" if @api_key.blank?
     end
 
-    def stream_chat(messages:, tools: nil, max_tokens: 8192,
+    def stream_chat(messages:, tools: nil, tool_choice: nil, max_tokens: 8192,
                     reasoning_effort: ENV.fetch("XAI_REASONING_EFFORT", "low"), &block)
       body = { model: @model, messages: messages, stream: true, max_tokens: max_tokens, reasoning_effort: reasoning_effort }
       if tools.present?
         body[:tools] = tools
         body[:parallel_tool_calls] = false
-        body[:tool_choice] = "auto"
+        body[:tool_choice] = tool_choice.presence || "auto"
       end
       post_sse("/chat/completions", body, &block)
     end
