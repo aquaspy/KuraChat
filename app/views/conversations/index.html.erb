@@ -1,5 +1,5 @@
 <% if turbo_frame_request? %>
-  <%= turbo_frame_tag "conversation-search" do %>
+  <%= turbo_frame_tag "conversation-search", target: "_top" do %>
     <%= render "conversations/list" %>
   <% end %>
 <% else %>

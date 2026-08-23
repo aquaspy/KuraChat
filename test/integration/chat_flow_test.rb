@@ -120,6 +120,7 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     get conversations_path, params: { q: "Tax" }
     assert_includes @response.body, "Taxes"
     assert_not_includes @response.body, "Garden"
+    assert_includes @response.body, %(target="_top")
   end
 
   test "search frame filters titles without discarding a draft" do
@@ -133,6 +134,7 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, "Taxes"
     assert_not_includes @response.body, "Garden"
     assert_includes @response.body, %(id="conversation-search")
+    assert_includes @response.body, %(target="_top")
     assert_not_includes @response.body, "col-editor"
     assert Conversation.exists?(draft.id)
   end

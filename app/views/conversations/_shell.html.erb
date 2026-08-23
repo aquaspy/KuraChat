@@ -42,7 +42,7 @@
         <%= search_field_tag :q, @query, placeholder: t("app.search"), class: "search", enterkeyhint: "search", autocomplete: "off" %>
       <% end %>
     </div>
-    <%= turbo_frame_tag "conversation-search" do %>
+    <%= turbo_frame_tag "conversation-search", target: "_top" do %>
       <%= render "conversations/list" %>
     <% end %>
     <div class="sidebar-foot desktop-only">
