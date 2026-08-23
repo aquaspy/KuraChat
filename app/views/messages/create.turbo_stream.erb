@@ -1,3 +1,4 @@
+<%= turbo_stream.remove "msg-echo" %>
 <%= turbo_stream.append "transcript" do %>
   <%= render "messages/message", message: @user_message, conversation: @conversation %>
 <% end %>

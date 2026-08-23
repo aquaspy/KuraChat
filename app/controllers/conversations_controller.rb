@@ -3,6 +3,7 @@ class ConversationsController < ApplicationController
 
   def index
     load_list
+    render :index, layout: false if turbo_frame_request?
   end
 
   def show
@@ -42,9 +43,11 @@ class ConversationsController < ApplicationController
     end
 
     def load_list
-      abandoned = current_user.conversations.blank_drafts
-      abandoned = abandoned.where.not(id: @conversation.id) if @conversation
-      abandoned.delete_all
+      unless turbo_frame_request?
+        abandoned = current_user.conversations.blank_drafts
+        abandoned = abandoned.where.not(id: @conversation.id) if @conversation
+        abandoned.delete_all
+      end
 
       @query = params[:q].to_s.strip
       scope = current_user.conversations.order(updated_at: :desc)

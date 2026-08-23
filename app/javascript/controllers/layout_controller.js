@@ -4,6 +4,18 @@ export default class extends Controller {
   static targets = ["menu", "menuButton"]
 
   connect() {
+    this.syncViewport = () => {
+      const vv = window.visualViewport
+      const height = vv?.height ?? window.innerHeight
+      const top = vv?.offsetTop ?? 0
+      document.documentElement.style.setProperty("--vvh", `${Math.round(height)}px`)
+      document.documentElement.style.setProperty("--vvt", `${Math.round(top)}px`)
+    }
+    this.syncViewport()
+    window.visualViewport?.addEventListener("resize", this.syncViewport)
+    window.visualViewport?.addEventListener("scroll", this.syncViewport)
+    window.addEventListener("resize", this.syncViewport)
+
     this.onPointer = (event) => {
       if (this.hasMenuTarget && !this.menuTarget.hidden && !event.target.closest(".mobile-menu, [data-layout-target='menuButton']")) {
         this.closeMenu()
@@ -13,6 +25,9 @@ export default class extends Controller {
   }
 
   disconnect() {
+    window.visualViewport?.removeEventListener("resize", this.syncViewport)
+    window.visualViewport?.removeEventListener("scroll", this.syncViewport)
+    window.removeEventListener("resize", this.syncViewport)
     document.removeEventListener("pointerdown", this.onPointer)
   }
 

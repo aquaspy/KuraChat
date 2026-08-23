@@ -38,11 +38,13 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <span><%= t("chat.new") %></span>
       <% end %>
-      <%= form_with url: conversations_path, method: :get, class: "search-form" do %>
-        <%= search_field_tag :q, @query, placeholder: t("app.search"), class: "search", enterkeyhint: "search" %>
+      <%= form_with url: conversations_path, method: :get, class: "search-form", data: { controller: "search", turbo_frame: "conversation-search", action: "input->search#query submit->search#flush" } do %>
+        <%= search_field_tag :q, @query, placeholder: t("app.search"), class: "search", enterkeyhint: "search", autocomplete: "off" %>
       <% end %>
     </div>
-    <%= render "conversations/list" %>
+    <%= turbo_frame_tag "conversation-search" do %>
+      <%= render "conversations/list" %>
+    <% end %>
     <div class="sidebar-foot desktop-only">
       <%= render "conversations/delete_all_button" %>
       <%= button_to lock_path, method: :post, class: "btn-io" do %>

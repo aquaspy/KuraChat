@@ -1,1 +1,7 @@
-<%= render "shell" %>
+<% if turbo_frame_request? %>
+  <%= turbo_frame_tag "conversation-search" do %>
+    <%= render "conversations/list" %>
+  <% end %>
+<% else %>
+  <%= render "shell" %>
+<% end %>

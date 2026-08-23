@@ -277,23 +277,36 @@ class ChatCompleter
     end
 
     def auto_title!
+      first = nil
       return if @conversation.title.present?
 
       first = @conversation.messages.where(role: "user").chronological.first
       return unless first
 
-      title = request_title(first.content) || fallback_title(first.content)
+      title = request_title(first.content)
+      title = title.presence || fallback_title(first.content)
       return if title.blank?
 
       @conversation.update!(title: title)
+      broadcast_title
+    rescue StandardError
+      @conversation.update!(title: fallback_title(first&.content)) if @conversation.title.blank?
+    end
+
+    def broadcast_title
+      stream = [ @conversation.user, @conversation ]
       Turbo::StreamsChannel.broadcast_replace_to(
-        [ @conversation.user, @conversation ],
+        stream,
         target: ActionView::RecordIdentifier.dom_id(@conversation, :title),
         partial: "conversations/title",
         locals: { conversation: @conversation }
       )
-    rescue Xai::Error, Xai::TimeoutError
-      @conversation.update!(title: fallback_title(first&.content)) if @conversation.title.blank?
+      Turbo::StreamsChannel.broadcast_replace_to(
+        stream,
+        target: ActionView::RecordIdentifier.dom_id(@conversation, :title_field),
+        partial: "conversations/title_field",
+        locals: { conversation: @conversation }
+      )
     end
 
     def request_title(text)

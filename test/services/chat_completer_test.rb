@@ -42,6 +42,24 @@ class ChatCompleterTest < ActiveSupport::TestCase
     assert user
   end
 
+  class BoomTitle < FakeXai
+    def chat(**)
+      raise Xai::Error, "nope"
+    end
+  end
+
+  test "title request failure falls back to the first words" do
+    @chat.messages.create!(role: "user", content: "Hello there friend")
+    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+    xai = BoomTitle.new(chunks: [
+      { "choices" => [ { "delta" => { "content" => "Hi" }, "finish_reason" => "stop" } ] }
+    ])
+    ChatCompleter.new(assistant, xai: xai).run
+    assistant.reload
+    assert_equal "complete", assistant.status
+    assert_equal "Hello there friend", @chat.reload.title
+  end
+
   class RecordingXai
     attr_reader :tool_choices
 

@@ -121,4 +121,28 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, "Taxes"
     assert_not_includes @response.body, "Garden"
   end
+
+  test "search frame filters titles without discarding a draft" do
+    post conversations_path
+    draft = @user.conversations.last
+    @user.conversations.create!(title: "Garden")
+    @user.conversations.create!(title: "Taxes")
+
+    get conversations_path, params: { q: "Tax" }, headers: { "Turbo-Frame" => "conversation-search" }
+    assert_response :success
+    assert_includes @response.body, "Taxes"
+    assert_not_includes @response.body, "Garden"
+    assert_includes @response.body, %(id="conversation-search")
+    assert_not_includes @response.body, "col-editor"
+    assert Conversation.exists?(draft.id)
+  end
+
+  test "new chat composer autofocuses and title field is streamable" do
+    post conversations_path
+    chat = @user.conversations.last
+    get conversation_path(chat)
+    assert_response :success
+    assert_includes @response.body, "autofocus"
+    assert_includes @response.body, %(id="title_field_conversation_#{chat.id}")
+  end
 end
