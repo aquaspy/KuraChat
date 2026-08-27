@@ -158,7 +158,7 @@ A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds a search call. 
 
 Long chats are compacted automatically: Grok only sees the last 16 visible messages plus a short rolling summary. Old search extracts are not resent on later turns. The full transcript stays in SQLite.
 
-The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns. Leave `BRAVE_SEARCH_LANG` unset so tech/global queries are not stuck on Portuguese pages; set `BRAVE_COUNTRY=BR` if you want Brazilian ranking even when the UI is English. Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads the extracts; cheap model-only turns stay on `low`.
+The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns. Kagi uses news and weather hits, one result per site, and strips cookie/share chrome from page extracts. Set `KAGI_REGION=BR` if you want Brazilian ranking when the UI is English (`ALL` turns that off). Leave `BRAVE_SEARCH_LANG` unset so tech/global queries are not stuck on Portuguese pages; set `BRAVE_COUNTRY=BR` if you want Brazilian ranking even when the UI is English. Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads the extracts; cheap model-only turns stay on `low`.
 
 ### Brave plans
 
@@ -185,6 +185,7 @@ Offline, the PWA can reopen the home page and any chat you already opened while 
 | `WEB_SEARCH_PROVIDER` | `kagi` (default) or `brave` |
 | `KAGI_API_KEY` | Required for Web when the provider is Kagi |
 | `KAGI_EXTRACT_COUNT` | Default `3` (0–10). Kagi only |
+| `KAGI_REGION` | Default `BR` when the UI is Portuguese. `ALL` omits the filter |
 | `BRAVE_API_KEY` | Required for Web when the provider is Brave |
 | `BRAVE_ENDPOINT` | `auto` (default): LLM Context when the plan has it, else Web Search. `llm` or `web` skips the probe |
 | `BRAVE_CONTEXT_TOKENS` | Default `8192` (1024–32768). Brave LLM Context only |
