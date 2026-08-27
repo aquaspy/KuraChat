@@ -378,7 +378,8 @@ class ChatCompleter
       }
       payload["note"] = "No results. Search again with a different query." if results.empty?
       [ payload, cites ]
-    rescue WebSearch::Error, JSON::ParserError
+    rescue WebSearch::Error, JSON::ParserError => e
+      Rails.logger.error("[ChatCompleter] search #{e.class}: #{e.message} #{e.respond_to?(:code) ? e.code : nil}")
       [ { "error" => "search_failed", "note" => "Live search failed. Say so; do not invent sources." }, [] ]
     end
 

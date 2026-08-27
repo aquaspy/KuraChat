@@ -1,6 +1,14 @@
 require "test_helper"
 
 class BraveClientTest < ActiveSupport::TestCase
+  setup do
+    Brave::Client.endpoint = nil
+  end
+
+  teardown do
+    Brave::Client.endpoint = nil
+  end
+
   test "does not pin search language to the UI locale" do
     I18n.with_locale(:pt) do
       payload = Brave::Client.build_payload(query: "Rails 8 release")
@@ -9,7 +17,8 @@ class BraveClientTest < ActiveSupport::TestCase
       assert_equal 20, payload[:count]
       assert_equal 8_192, payload[:maximum_number_of_tokens]
       assert_equal 4_096, payload[:maximum_number_of_tokens_per_url]
-      assert_equal false, payload[:enable_local]
+      refute payload.key?(:enable_local)
+      refute payload.key?(:enable_source_metadata)
     end
   end
 
@@ -26,8 +35,11 @@ class BraveClientTest < ActiveSupport::TestCase
     ENV["BRAVE_COUNTRY"] = "ALL"
     ENV["BRAVE_SEARCH_LANG"] = "pt"
     payload = Brave::Client.build_payload(query: "dólar")
-    assert_equal "ALL", payload[:country]
+    refute payload.key?(:country)
     assert_equal "pt", payload[:search_lang]
+    web = Brave::Client.build_web_params(query: "dólar")
+    refute web.key?(:country)
+    assert_equal true, web[:extra_snippets]
   ensure
     restore_env("BRAVE_COUNTRY", old_country)
     restore_env("BRAVE_SEARCH_LANG", old_lang)
@@ -149,9 +161,77 @@ class BraveClientTest < ActiveSupport::TestCase
     assert_nil Brave::Client::FRESHNESS["any"]
   end
 
+  test "maps web search news ahead of organic results" do
+    rows = Brave::Client.normalize_web({
+      "news" => {
+        "results" => [
+          {
+            "title" => "Breaking",
+            "url" => "https://news.example/a",
+            "description" => "Dólar <strong>hoje</strong> a R$ 5,13",
+            "page_age" => "2026-08-27T12:00:00",
+            "meta_url" => { "hostname" => "news.example" }
+          }
+        ]
+      },
+      "web" => {
+        "results" => [
+          {
+            "title" => "Docs",
+            "url" => "https://docs.example",
+            "description" => "Guide",
+            "extra_snippets" => [ "More" ],
+            "age" => "1 day ago"
+          },
+          { "title" => "Nope" }
+        ]
+      }
+    })
+
+    assert_equal [ "https://news.example/a", "https://docs.example" ], rows.map { |r| r[:url] }
+    assert_equal "news.example", rows[0][:site]
+    assert_equal "2026-08-27T12:00:00", rows[0][:date]
+    assert_equal "Dólar hoje a R$ 5,13", rows[0][:snippet]
+    refute_includes rows[0][:snippet], "<strong>"
+    assert_includes rows[1][:snippet], "Guide"
+    assert_includes rows[1][:snippet], "More"
+  end
+
+  test "falls back to web search when llm context is not in the plan" do
+    client = FallbackClient.new
+    rows = client.search(query: "dolar hoje")
+    assert_equal "web", Brave::Client.endpoint
+    assert_equal 1, rows.size
+    assert_equal "https://wise.example", rows[0][:url]
+  end
+
+  test "option_not_in_plan is detected from the Brave error code" do
+    error = Brave::Error.new("http_400", http_status: 400, code: "OPTION_NOT_IN_PLAN")
+    assert_predicate error, :option_not_in_plan?
+    refute_predicate Brave::Error.new("http_429", http_status: 429, code: "RATE_LIMITED"), :option_not_in_plan?
+  end
+
   test "missing key raises the same missing_key error the completer expects" do
     error = assert_raises(WebSearch::Error) { Brave::Client.new(api_key: "") }
     assert_equal "missing_key", error.message
+  end
+
+  class FallbackClient < Brave::Client
+    def initialize
+      @api_key = "x"
+    end
+
+    def post(*)
+      raise Brave::Error.new("http_400", http_status: 400, code: "OPTION_NOT_IN_PLAN")
+    end
+
+    def get(*)
+      {
+        "web" => {
+          "results" => [ { "title" => "Dólar", "url" => "https://wise.example", "description" => "5.40" } ]
+        }
+      }
+    end
   end
 
   private

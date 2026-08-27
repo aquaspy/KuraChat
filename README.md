@@ -158,7 +158,7 @@ A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds a search call. 
 
 Long chats are compacted automatically: Grok only sees the last 16 visible messages plus a short rolling summary. Old search extracts are not resent on later turns. The full transcript stays in SQLite.
 
-The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns. Set `BRAVE_CONTEXT_TOKENS=8192` (or up to 32768) to size Brave's extracted context. Leave `BRAVE_SEARCH_LANG` unset so tech/global queries are not stuck on Portuguese pages; set `BRAVE_COUNTRY=BR` if you want Brazilian ranking even when the UI is English. Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads the extracts; cheap model-only turns stay on `low`.
+The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns. Brave tries **LLM Context** first (page extracts). The legacy Free plan does not include that endpoint, so the app falls back to **web/search** (titles, snippets, news) after one `OPTION_NOT_IN_PLAN`. Set `BRAVE_ENDPOINT=web` to skip the failed probe. Set `BRAVE_CONTEXT_TOKENS=8192` (or up to 32768) when LLM Context is on the plan. Leave `BRAVE_SEARCH_LANG` unset so tech/global queries are not stuck on Portuguese pages; set `BRAVE_COUNTRY=BR` if you want Brazilian ranking even when the UI is English. Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads the extracts; cheap model-only turns stay on `low`.
 
 Offline, the PWA can reopen the home page and any chat you already opened while online. Sending stays disabled until you are back online.
 
@@ -175,8 +175,9 @@ Offline, the PWA can reopen the home page and any chat you already opened while 
 | `KAGI_API_KEY` | Required for Web when the provider is Kagi |
 | `KAGI_EXTRACT_COUNT` | Default `3` (0–10). Kagi only |
 | `BRAVE_API_KEY` | Required for Web when the provider is Brave |
-| `BRAVE_CONTEXT_TOKENS` | Default `8192` (1024–32768). Brave only |
-| `BRAVE_COUNTRY` | Default `BR` when the UI is Portuguese, else `US`. `ALL` is allowed |
+| `BRAVE_ENDPOINT` | `auto` (default), `llm`, or `web`. Free plans must use web |
+| `BRAVE_CONTEXT_TOKENS` | Default `8192` (1024–32768). Brave LLM Context only |
+| `BRAVE_COUNTRY` | Default `BR` when the UI is Portuguese, else `US`. `ALL` omits the filter |
 | `BRAVE_SEARCH_LANG` | Unset by default. Do not pin to `pt` unless you only want Portuguese pages |
 | `SIGNUP_ENABLED` | Public signup form. Turn off after the first account |
 | `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |
