@@ -8,33 +8,53 @@ module Brave
   class Client
     BASE = URI("https://api.search.brave.com/res/v1")
     FRESHNESS = { "day" => "pd", "week" => "pw", "month" => "pm" }.freeze
-    SNIPPET_CHARS = 4_000
+    COUNTRY_FOR_LOCALE = { "pt" => "BR", "en" => "US" }.freeze
+    SNIPPET_CHARS = 16_000
+    DEFAULT_LIMIT = 20
+    DEFAULT_TOKENS = 8_192
 
     def initialize(api_key: ENV["BRAVE_API_KEY"])
       @api_key = api_key.to_s
       raise Error, "missing_key" if @api_key.blank?
     end
 
-    def search(query:, recency: nil, limit: 8, context_tokens: Integer(ENV.fetch("BRAVE_CONTEXT_TOKENS", "4096")))
-      urls = limit.to_i.clamp(1, 20)
-      tokens = context_tokens.clamp(1_024, 32_768)
+    def search(query:, recency: nil, limit: DEFAULT_LIMIT, context_tokens: Integer(ENV.fetch("BRAVE_CONTEXT_TOKENS", DEFAULT_TOKENS.to_s)))
+      payload = self.class.build_payload(query:, recency:, limit:, context_tokens:)
+      data = post("/llm/context", payload)
+      rows = self.class.normalize(data)
+      Rails.logger.info("[Brave] results=#{rows.size} country=#{payload[:country]} lang=#{payload[:search_lang] || "-"}")
+      rows
+    end
+
+    def self.build_payload(query:, recency: nil, limit: DEFAULT_LIMIT, context_tokens: DEFAULT_TOKENS)
+      urls = limit.to_i.clamp(1, 50)
+      tokens = context_tokens.to_i.clamp(1_024, 32_768)
       payload = {
         q: query.to_s.truncate(400),
         count: urls,
+        country: country,
         maximum_number_of_urls: urls,
         maximum_number_of_tokens: tokens,
-        maximum_number_of_tokens_per_url: [ tokens, 2_048 ].min.clamp(512, 8_192),
+        maximum_number_of_tokens_per_url: [ tokens, 4_096 ].min.clamp(512, 8_192),
         context_threshold_mode: "balanced",
-        enable_source_metadata: true
+        enable_source_metadata: true,
+        enable_local: false
       }
       payload[:freshness] = FRESHNESS[recency.to_s] if FRESHNESS.key?(recency.to_s)
-      lang = I18n.locale.to_s[0, 2]
+      lang = search_lang
       payload[:search_lang] = lang if lang.present?
+      payload
+    end
 
-      data = post("/llm/context", payload)
-      rows = self.class.normalize(data)
-      Rails.logger.info("[Brave] results=#{rows.size}")
-      rows
+    def self.country
+      raw = ENV["BRAVE_COUNTRY"].to_s.strip.upcase
+      return raw if raw.present?
+
+      COUNTRY_FOR_LOCALE.fetch(I18n.locale.to_s[0, 2], "US")
+    end
+
+    def self.search_lang
+      ENV["BRAVE_SEARCH_LANG"].to_s.strip.downcase.presence
     end
 
     def self.normalize(data)
@@ -44,7 +64,7 @@ module Brave
       rows += [ poi ] if poi.is_a?(Hash)
       rows += Array(data.dig("grounding", "map"))
 
-      rows.first(8).filter_map { |row|
+      rows.filter_map { |row|
         next unless row.is_a?(Hash)
 
         url = row["url"].to_s
@@ -64,6 +84,7 @@ module Brave
         {
           title: (row["title"].presence || meta["title"]).to_s,
           url: url,
+          site: (meta["hostname"].presence || meta["site_name"]).to_s,
           date: date.to_s,
           snippet: snippet.truncate(SNIPPET_CHARS, omission: "…")
         }

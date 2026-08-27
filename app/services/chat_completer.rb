@@ -2,23 +2,23 @@ class ChatCompleter
   class Gone < StandardError; end
 
   MAX_TOOL_ROUNDS = 4
-  MAX_SEARCHES = 2
+  MAX_SEARCHES = 3
   HEARTBEAT_EVERY = 60
   FLUSH_EVERY = 0.25
   FLUSH_CHARS = 80
   WINDOW_MESSAGES = Integer(ENV.fetch("CHAT_WINDOW_MESSAGES", "40"))
-  WINDOW_TOKENS   = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "12000"))
+  WINDOW_TOKENS   = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "32000"))
   KEEP_RECENT     = Integer(ENV.fetch("CHAT_KEEP_RECENT", "16"))
 
   WEB_SEARCH_TOOL = {
     type: "function",
     function: {
       name: "web_search",
-      description: "Search the live web and read extracted page content. Use for current events, prices, news, people, products, docs, or facts that may have changed. Prefer one precise query. Follow up only if the first results are insufficient.",
+      description: "Search the live web and read extracted page content. Write a search-engine query, not the user's sentence: include names, places, years, and product versions. Query in Portuguese for Brazilian news, prices, services, and local topics; query in English for docs, papers, software, and global products. Use recency=day for breaking news, week for recent events, month for ongoing stories; omit recency for evergreen facts. If the first results do not answer the question, search again with a different query.",
       parameters: {
         type: "object",
         properties: {
-          query: { type: "string", description: "Search query" },
+          query: { type: "string", description: "Search-engine query with key entities and dates" },
           recency: {
             type: "string",
             enum: %w[day week month any],
@@ -177,11 +177,20 @@ class ChatCompleter
     end
 
     def assembled_system_prompt
-      prompt = system_prompt
+      now = Time.zone.now
+      prompt = "#{system_prompt}\nCurrent date: #{now.strftime("%Y-%m-%d %A")} (#{Time.zone.tzinfo.identifier})."
       if @conversation.summary.present?
         prompt = "#{prompt}\n\nEarlier conversation summary:\n#{@conversation.summary}"
       end
       prompt
+    end
+
+    def reasoning_effort
+      if web?
+        ENV.fetch("XAI_WEB_REASONING_EFFORT", "medium")
+      else
+        ENV.fetch("XAI_REASONING_EFFORT", "low")
+      end
     end
 
     def maybe_compact!
@@ -254,7 +263,7 @@ class ChatCompleter
         end
       end
       ActiveRecord::Base.connection_pool.release_connection
-      xai.stream_chat(messages: payload, tools: @tools, tool_choice: @tool_choice, &block)
+      xai.stream_chat(messages: payload, tools: @tools, tool_choice: @tool_choice, reasoning_effort: reasoning_effort, &block)
     ensure
       stop = true
     end
@@ -354,9 +363,23 @@ class ChatCompleter
       recency = args["recency"]
       results = with_heartbeat { search_client.search(query: query, recency: recency) }
       cites = results.map { |r| { "title" => r[:title], "url" => r[:url] } }
-      [ { "query" => query, "results" => results }, cites ]
+      payload = {
+        "query" => query,
+        "results" => results.each_with_index.map { |row, i|
+          {
+            "n" => i + 1,
+            "title" => row[:title],
+            "url" => row[:url],
+            "site" => row[:site],
+            "date" => row[:date],
+            "snippet" => row[:snippet]
+          }.compact_blank
+        }
+      }
+      payload["note"] = "No results. Search again with a different query." if results.empty?
+      [ payload, cites ]
     rescue WebSearch::Error, JSON::ParserError
-      [ { "error" => "search_failed" }, [] ]
+      [ { "error" => "search_failed", "note" => "Live search failed. Say so; do not invent sources." }, [] ]
     end
 
     def with_heartbeat

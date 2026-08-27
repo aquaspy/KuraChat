@@ -18,6 +18,7 @@ module Kurachat
     config.autoload_lib(ignore: %w[assets tasks])
     config.i18n.available_locales = [ :en, :pt ]
     config.i18n.default_locale = :en
+    config.time_zone = "America/Sao_Paulo"
 
     # Configuration for the application, engines, and railties goes here.
     #
