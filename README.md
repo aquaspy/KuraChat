@@ -158,7 +158,7 @@ A casual grok-4.3 turn is about $0.0045. Turning **Web** on adds a search call. 
 
 Long chats are compacted automatically: Grok only sees the last 16 visible messages plus a short rolling summary. Old search extracts are not resent on later turns. The full transcript stays in SQLite.
 
-The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns. Kagi uses news and weather hits, one result per site, and strips cookie/share chrome from page extracts. Set `KAGI_REGION=BR` if you want Brazilian ranking when the UI is English (`ALL` turns that off). Leave `BRAVE_SEARCH_LANG` unset so tech/global queries are not stuck on Portuguese pages; set `BRAVE_COUNTRY=BR` if you want Brazilian ranking even when the UI is English. Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads the extracts; cheap model-only turns stay on `low`.
+The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` in `.env` if you want cheaper Kagi turns. Kagi uses news and weather hits, one result per site, and strips cookie/share chrome from page extracts. Search region follows the browser `Accept-Language`: `pt-BR` → Brazil, `pt-PT` → Portugal, `en-GB` → UK. Portuguese without a country defaults to **BR**. English without a country is left unset so docs and global queries are not forced to the US. Pin everyone with `SEARCH_REGION=BR`, or per provider with `KAGI_REGION` / `BRAVE_COUNTRY` (`ALL` turns the filter off). Leave `BRAVE_SEARCH_LANG` unset so tech/global queries are not stuck on Portuguese pages. Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads the extracts; cheap model-only turns stay on `low`.
 
 ### Brave plans
 
@@ -185,11 +185,12 @@ Offline, the PWA can reopen the home page and any chat you already opened while 
 | `WEB_SEARCH_PROVIDER` | `kagi` (default) or `brave` |
 | `KAGI_API_KEY` | Required for Web when the provider is Kagi |
 | `KAGI_EXTRACT_COUNT` | Default `3` (0–10). Kagi only |
-| `KAGI_REGION` | Default `BR` when the UI is Portuguese. `ALL` omits the filter |
+| `SEARCH_REGION` | Optional pin for both providers (`BR`, `PT`, `ALL`, …) |
+| `KAGI_REGION` | Overrides `SEARCH_REGION` for Kagi |
 | `BRAVE_API_KEY` | Required for Web when the provider is Brave |
 | `BRAVE_ENDPOINT` | `auto` (default): LLM Context when the plan has it, else Web Search. `llm` or `web` skips the probe |
 | `BRAVE_CONTEXT_TOKENS` | Default `8192` (1024–32768). Brave LLM Context only |
-| `BRAVE_COUNTRY` | Default `BR` when the UI is Portuguese, else `US`. `ALL` omits the filter |
+| `BRAVE_COUNTRY` | Overrides `SEARCH_REGION` for Brave |
 | `BRAVE_SEARCH_LANG` | Unset by default. Do not pin to `pt` unless you only want Portuguese pages |
 | `SIGNUP_ENABLED` | Public signup form. Turn off after the first account |
 | `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |

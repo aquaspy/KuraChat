@@ -12,7 +12,9 @@ class KagiClientTest < ActiveSupport::TestCase
 
   test "localizes Portuguese UI to Brazil and keeps recency in the same lens" do
     old = ENV["KAGI_REGION"]
+    old_shared = ENV["SEARCH_REGION"]
     ENV.delete("KAGI_REGION")
+    ENV.delete("SEARCH_REGION")
     I18n.with_locale(:pt) do
       payload = Kagi::Client.build_payload(query: "dolar hoje", recency: "day")
       assert_equal "BR", payload.dig(:lens, :search_region)
@@ -21,6 +23,21 @@ class KagiClientTest < ActiveSupport::TestCase
     end
   ensure
     restore_env("KAGI_REGION", old)
+    restore_env("SEARCH_REGION", old_shared)
+  end
+
+  test "omits region for English and honors an explicit PT region" do
+    old = ENV["KAGI_REGION"]
+    old_shared = ENV["SEARCH_REGION"]
+    ENV.delete("KAGI_REGION")
+    ENV.delete("SEARCH_REGION")
+    I18n.with_locale(:en) do
+      refute Kagi::Client.build_payload(query: "rails").dig(:lens, :search_region)
+      assert_equal "PT", Kagi::Client.build_payload(query: "tempo", region: "PT").dig(:lens, :search_region)
+    end
+  ensure
+    restore_env("KAGI_REGION", old)
+    restore_env("SEARCH_REGION", old_shared)
   end
 
   test "omits extract when count is zero" do

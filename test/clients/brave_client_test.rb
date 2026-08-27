@@ -10,6 +10,10 @@ class BraveClientTest < ActiveSupport::TestCase
   end
 
   test "does not pin search language to the UI locale" do
+    old_country = ENV["BRAVE_COUNTRY"]
+    old_shared = ENV["SEARCH_REGION"]
+    ENV.delete("BRAVE_COUNTRY")
+    ENV.delete("SEARCH_REGION")
     I18n.with_locale(:pt) do
       payload = Brave::Client.build_payload(query: "Rails 8 release")
       refute payload.key?(:search_lang)
@@ -20,12 +24,29 @@ class BraveClientTest < ActiveSupport::TestCase
       refute payload.key?(:enable_local)
       refute payload.key?(:enable_source_metadata)
     end
+  ensure
+    restore_env("BRAVE_COUNTRY", old_country)
+    restore_env("SEARCH_REGION", old_shared)
   end
 
-  test "uses US country for English locale" do
+  test "omits country for English locale so tech queries stay global" do
+    old_country = ENV["BRAVE_COUNTRY"]
+    old_shared = ENV["SEARCH_REGION"]
+    ENV.delete("BRAVE_COUNTRY")
+    ENV.delete("SEARCH_REGION")
     I18n.with_locale(:en) do
       payload = Brave::Client.build_payload(query: "weather")
-      assert_equal "US", payload[:country]
+      refute payload.key?(:country)
+    end
+  ensure
+    restore_env("BRAVE_COUNTRY", old_country)
+    restore_env("SEARCH_REGION", old_shared)
+  end
+
+  test "uses an explicit region from the browser over the UI language" do
+    I18n.with_locale(:en) do
+      payload = Brave::Client.build_payload(query: "weather", region: "GB")
+      assert_equal "GB", payload[:country]
     end
   end
 

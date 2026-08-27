@@ -20,7 +20,7 @@ class MessagesController < ApplicationController
       )
       @assistant = @conversation.messages.create!(role: "assistant", status: "pending", content: "")
     end
-    CompleteChatJob.perform_later(@assistant.id, I18n.locale.to_s)
+    CompleteChatJob.perform_later(@assistant.id, I18n.locale.to_s, search_region)
     @query = params[:q].to_s.strip
     @conversations = current_user.conversations.order(updated_at: :desc)
     respond_to do |format|
@@ -47,7 +47,7 @@ class MessagesController < ApplicationController
       end
       @message.update!(status: "pending", error: nil, content: "")
     end
-    CompleteChatJob.perform_later(@message.id, I18n.locale.to_s)
+    CompleteChatJob.perform_later(@message.id, I18n.locale.to_s, search_region)
     respond_to do |format|
       format.turbo_stream { render :retry }
       format.html { redirect_to @conversation }
@@ -59,5 +59,9 @@ class MessagesController < ApplicationController
   private
     def set_conversation
       @conversation = current_user.conversations.find(params[:conversation_id])
+    end
+
+    def search_region
+      WebSearch.region_from_header(request.headers["Accept-Language"])
     end
 end

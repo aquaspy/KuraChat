@@ -34,10 +34,11 @@ class ChatCompleter
     new(message, locale: I18n.locale).broadcast_failed
   end
 
-  def initialize(assistant_message, locale: I18n.default_locale, xai: nil, search: nil, kagi: nil)
+  def initialize(assistant_message, locale: I18n.default_locale, region: nil, xai: nil, search: nil, kagi: nil)
     @assistant = assistant_message
     @conversation = assistant_message.conversation
     @locale = locale
+    @region = WebSearch.normalize_region(region) || WebSearch.region_from_locale(locale)
     @user_message = @conversation.messages.where(role: "user").where("id < ?", @assistant.id).last
     @searches = 0
     @xai = xai
@@ -361,7 +362,7 @@ class ChatCompleter
       @searches += 1
       query = args["query"].to_s
       recency = args["recency"]
-      results = with_heartbeat { search_client.search(query: query, recency: recency) }
+      results = with_heartbeat { search_client.search(query: query, recency: recency, region: @region) }
       cites = results.map { |r| { "title" => r[:title], "url" => r[:url] } }
       payload = {
         "query" => query,

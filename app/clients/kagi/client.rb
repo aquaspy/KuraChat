@@ -9,7 +9,6 @@ module Kagi
 
   class Client
     BASE = URI("https://kagi.com/api/v1")
-    COUNTRY_FOR_LOCALE = { "pt" => "BR", "en" => "US" }.freeze
     SNIPPET_CHARS = 4_000
     DEFAULT_LIMIT = 12
     KEEP = 8
@@ -22,32 +21,33 @@ module Kagi
       raise Error, "missing_key" if @api_key.blank?
     end
 
-    def search(query:, recency: nil, limit: DEFAULT_LIMIT, extract_count: Integer(ENV.fetch("KAGI_EXTRACT_COUNT", "3")))
-      payload = self.class.build_payload(query:, recency:, limit:, extract_count:)
+    def search(query:, recency: nil, region: nil, limit: DEFAULT_LIMIT, extract_count: Integer(ENV.fetch("KAGI_EXTRACT_COUNT", "3")))
+      payload = self.class.build_payload(query:, recency:, region:, limit:, extract_count:)
       data = post("/search", payload)
       rows = self.class.normalize(data)
       Rails.logger.info("[Kagi] ms=#{data.dig("meta", "ms")} trace=#{data.dig("meta", "trace")} results=#{rows.size} region=#{payload.dig(:lens, :search_region) || "-"}")
       rows
     end
 
-    def self.build_payload(query:, recency: nil, limit: DEFAULT_LIMIT, extract_count: Integer(ENV.fetch("KAGI_EXTRACT_COUNT", "3")))
+    def self.build_payload(query:, recency: nil, region: nil, limit: DEFAULT_LIMIT, extract_count: Integer(ENV.fetch("KAGI_EXTRACT_COUNT", "3")))
       payload = { query: query.to_s, workflow: "search", limit: limit.to_i.clamp(1, 20) }
       if extract_count.to_i.positive?
         payload[:extract] = { count: extract_count.to_i.clamp(1, 10), timeout: 8 }
       end
       lens = {}
       lens[:time_relative] = recency.to_s if recency.to_s.in?(%w[day week month])
-      lens[:search_region] = region if region.present?
+      resolved = region_for(region:)
+      lens[:search_region] = resolved if resolved.present?
       payload[:lens] = lens if lens.present?
       payload
     end
 
-    def self.region
-      raw = ENV["KAGI_REGION"].to_s.strip.upcase
-      raw = COUNTRY_FOR_LOCALE.fetch(I18n.locale.to_s[0, 2], nil) if raw.blank?
-      return nil if raw.blank? || raw == "ALL"
+    def self.region_for(region: nil)
+      WebSearch.region(explicit: region, env_key: "KAGI_REGION")
+    end
 
-      raw
+    def self.region
+      region_for
     end
 
     def self.normalize(payload)
