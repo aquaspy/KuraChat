@@ -2,11 +2,11 @@ require "test_helper"
 
 class BraveClientTest < ActiveSupport::TestCase
   setup do
-    Brave::Client.endpoint = nil
+    Brave::Client.reset!
   end
 
   teardown do
-    Brave::Client.endpoint = nil
+    Brave::Client.reset!
   end
 
   test "does not pin search language to the UI locale" do
@@ -201,14 +201,58 @@ class BraveClientTest < ActiveSupport::TestCase
     client = FallbackClient.new
     rows = client.search(query: "dolar hoje")
     assert_equal "web", Brave::Client.endpoint
+    refute Brave::Client.lean?
     assert_equal 1, rows.size
     assert_equal "https://wise.example", rows[0][:url]
+    assert_equal %i[llm llm], client.posts
+    assert_equal %i[full], client.gets
+  end
+
+  test "keeps llm context when the plan includes it" do
+    client = FallbackClient.new
+    client.llm_body = {
+      "grounding" => {
+        "generic" => [ { "url" => "https://docs.example", "title" => "Docs", "snippets" => [ "Rails 8" ] } ]
+      }
+    }
+    rows = client.search(query: "Rails 8")
+    assert_equal "llm", Brave::Client.endpoint
+    assert_equal "https://docs.example", rows[0][:url]
+    assert_equal %i[llm], client.posts
+    assert_empty client.gets
+  end
+
+  test "retries llm without optional fields before giving up on the plan" do
+    client = FallbackClient.new
+    client.fail_llm_full = true
+    client.llm_body = {
+      "grounding" => {
+        "generic" => [ { "url" => "https://lean.example", "title" => "Lean", "snippets" => [ "ok" ] } ]
+      }
+    }
+    rows = client.search(query: "news")
+    assert_equal "llm", Brave::Client.endpoint
+    assert Brave::Client.lean?
+    assert_equal "https://lean.example", rows[0][:url]
+    assert_equal %i[llm llm], client.posts
+    assert_empty client.gets
+  end
+
+  test "retries web search without extra snippets when those are plan-gated" do
+    client = FallbackClient.new
+    client.fail_web_full = true
+    rows = client.search(query: "dolar hoje")
+    assert_equal "web", Brave::Client.endpoint
+    assert Brave::Client.lean?
+    assert_equal "https://wise.example", rows[0][:url]
+    assert_equal %i[full lean], client.gets
   end
 
   test "option_not_in_plan is detected from the Brave error code" do
     error = Brave::Error.new("http_400", http_status: 400, code: "OPTION_NOT_IN_PLAN")
     assert_predicate error, :option_not_in_plan?
-    refute_predicate Brave::Error.new("http_429", http_status: 429, code: "RATE_LIMITED"), :option_not_in_plan?
+    assert_predicate error, :plan_blocked?
+    refute_predicate Brave::Error.new("http_429", http_status: 429, code: "RATE_LIMITED"), :plan_blocked?
   end
 
   test "missing key raises the same missing_key error the completer expects" do
@@ -217,20 +261,35 @@ class BraveClientTest < ActiveSupport::TestCase
   end
 
   class FallbackClient < Brave::Client
+    attr_accessor :llm_body, :fail_llm_full, :fail_web_full
+    attr_reader :posts, :gets
+
     def initialize
       @api_key = "x"
+      @posts = []
+      @gets = []
     end
 
-    def post(*)
-      raise Brave::Error.new("http_400", http_status: 400, code: "OPTION_NOT_IN_PLAN")
+    def post(_path, payload)
+      lean = !payload.key?(:maximum_number_of_tokens)
+      @posts << :llm
+      raise_plan! if llm_body.nil? || (fail_llm_full && !lean)
+      llm_body
     end
 
-    def get(*)
+    def get(_path, params)
+      lean = !params.key?(:extra_snippets)
+      @gets << (lean ? :lean : :full)
+      raise_plan! if fail_web_full && !lean
       {
         "web" => {
           "results" => [ { "title" => "Dólar", "url" => "https://wise.example", "description" => "5.40" } ]
         }
       }
+    end
+
+    def raise_plan!
+      raise Brave::Error.new("http_400", http_status: 400, code: "OPTION_NOT_IN_PLAN")
     end
   end
 

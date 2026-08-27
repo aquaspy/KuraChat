@@ -15,9 +15,16 @@ module Brave
     def option_not_in_plan?
       code == "OPTION_NOT_IN_PLAN"
     end
+
+    def plan_blocked?
+      option_not_in_plan? || message.to_s.match?(/not included in the plan/i)
+    end
   end
   class TimeoutError < WebSearch::TimeoutError; end
 
+  # Uses whichever Brave Search capability the API key actually has.
+  # Search plan → LLM Context (page extracts). Legacy Free and plans
+  # without that endpoint → Web Search (titles, snippets, news).
   class Client
     BASE = URI("https://api.search.brave.com/res/v1")
     FRESHNESS = { "day" => "pd", "week" => "pw", "month" => "pm" }.freeze
@@ -29,11 +36,27 @@ module Brave
 
     class << self
       def endpoint
-        Brave::Client.instance_variable_get(:@endpoint)
+        state[:endpoint]
       end
 
       def endpoint=(value)
-        Brave::Client.instance_variable_set(:@endpoint, value)
+        state[:endpoint] = value
+      end
+
+      def lean?
+        state[:lean]
+      end
+
+      def lean=(value)
+        state[:lean] = value
+      end
+
+      def reset!
+        @state = { endpoint: nil, lean: false }
+      end
+
+      def state
+        @state ||= { endpoint: nil, lean: false }
       end
     end
 
@@ -43,29 +66,34 @@ module Brave
     end
 
     def search(query:, recency: nil, limit: DEFAULT_LIMIT, context_tokens: Integer(ENV.fetch("BRAVE_CONTEXT_TOKENS", DEFAULT_TOKENS.to_s)))
-      if web_endpoint?
-        return search_web(query:, recency:, limit:)
+      last_error = nil
+      adapters.each do |adapter|
+        richness_order.each do |lean|
+          begin
+            rows = invoke(adapter, query:, recency:, limit:, context_tokens:, lean:)
+            Brave::Client.endpoint = adapter
+            Brave::Client.lean = lean
+            return rows
+          rescue Error => e
+            last_error = e
+            raise unless e.plan_blocked?
+          end
+        end
       end
+      raise last_error if last_error
 
-      search_llm(query:, recency:, limit:, context_tokens:)
-    rescue Error => e
-      raise unless e.option_not_in_plan? && !web_endpoint?
-
-      Rails.logger.warn("[Brave] llm/context not in this plan; falling back to web/search")
-      Brave::Client.endpoint = "web"
-      search_web(query:, recency:, limit:)
+      []
     end
 
-    def self.build_payload(query:, recency: nil, limit: DEFAULT_LIMIT, context_tokens: DEFAULT_TOKENS)
+    def self.build_payload(query:, recency: nil, limit: DEFAULT_LIMIT, context_tokens: DEFAULT_TOKENS, lean: false)
       urls = limit.to_i.clamp(1, 50)
-      tokens = context_tokens.to_i.clamp(1_024, 32_768)
-      payload = {
-        q: query.to_s.truncate(400),
-        count: urls,
-        maximum_number_of_urls: urls,
-        maximum_number_of_tokens: tokens,
-        maximum_number_of_tokens_per_url: [ tokens, 4_096 ].min.clamp(512, 8_192)
-      }
+      payload = { q: query.to_s.truncate(400), count: urls }
+      unless lean
+        tokens = context_tokens.to_i.clamp(1_024, 32_768)
+        payload[:maximum_number_of_urls] = urls
+        payload[:maximum_number_of_tokens] = tokens
+        payload[:maximum_number_of_tokens_per_url] = [ tokens, 4_096 ].min.clamp(512, 8_192)
+      end
       payload[:country] = country if country.present?
       payload[:freshness] = FRESHNESS[recency.to_s] if FRESHNESS.key?(recency.to_s)
       lang = search_lang
@@ -73,14 +101,15 @@ module Brave
       payload
     end
 
-    def self.build_web_params(query:, recency: nil, limit: DEFAULT_LIMIT)
+    def self.build_web_params(query:, recency: nil, limit: DEFAULT_LIMIT, lean: false)
       params = {
         q: query.to_s.truncate(400),
-        count: limit.to_i.clamp(1, 20),
-        extra_snippets: true,
-        text_decorations: false,
-        spellcheck: true
+        count: limit.to_i.clamp(1, 20)
       }
+      unless lean
+        params[:extra_snippets] = true
+        params[:text_decorations] = false
+      end
       params[:country] = country if country.present?
       params[:freshness] = FRESHNESS[recency.to_s] if FRESHNESS.key?(recency.to_s)
       lang = search_lang
@@ -101,7 +130,7 @@ module Brave
     end
 
     def self.configured_endpoint
-      name = (self.endpoint.presence || ENV.fetch("BRAVE_ENDPOINT", "auto")).to_s.strip.downcase
+      name = ENV.fetch("BRAVE_ENDPOINT", "auto").to_s.strip.downcase
       ENDPOINTS.include?(name) ? name : "auto"
     end
 
@@ -169,23 +198,44 @@ module Brave
     end
 
     private
-      def web_endpoint?
-        self.class.configured_endpoint == "web"
+      def adapters
+        case self.class.configured_endpoint
+        when "web" then %w[web]
+        when "llm" then %w[llm]
+        else
+          case self.class.endpoint
+          when "web" then %w[web]
+          when "llm" then %w[llm web]
+          else %w[llm web]
+          end
+        end
       end
 
-      def search_llm(query:, recency:, limit:, context_tokens:)
-        payload = self.class.build_payload(query:, recency:, limit:, context_tokens:)
+      def richness_order
+        self.class.lean? ? [ true ] : [ false, true ]
+      end
+
+      def invoke(adapter, query:, recency:, limit:, context_tokens:, lean:)
+        if adapter == "web"
+          search_web(query:, recency:, limit:, lean:)
+        else
+          search_llm(query:, recency:, limit:, context_tokens:, lean:)
+        end
+      end
+
+      def search_llm(query:, recency:, limit:, context_tokens:, lean:)
+        payload = self.class.build_payload(query:, recency:, limit:, context_tokens:, lean:)
         data = post("/llm/context", payload)
         rows = self.class.normalize(data)
-        Rails.logger.info("[Brave] llm results=#{rows.size} country=#{payload[:country] || "-"}")
+        Rails.logger.info("[Brave] llm results=#{rows.size} lean=#{lean} country=#{payload[:country] || "-"}")
         rows
       end
 
-      def search_web(query:, recency:, limit:)
-        params = self.class.build_web_params(query:, recency:, limit:)
+      def search_web(query:, recency:, limit:, lean:)
+        params = self.class.build_web_params(query:, recency:, limit:, lean:)
         data = get("/web/search", params)
         rows = self.class.normalize_web(data)
-        Rails.logger.info("[Brave] web results=#{rows.size} country=#{params[:country] || "-"}")
+        Rails.logger.info("[Brave] web results=#{rows.size} lean=#{lean} country=#{params[:country] || "-"}")
         rows
       end
 
