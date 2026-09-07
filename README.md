@@ -146,6 +146,12 @@ docker compose exec web tar -C /rails/storage -cf - . > kurachat-backup.tar
 
 Sign out **and** wait for the cache wipe. Until then, another person opening the PWA offline can see the previous user’s cached conversation HTML.
 
+### Runtime (queue & YJIT)
+
+Solid Queue stays **on** here (`SOLID_QUEUE_IN_PUMA` + `:solid_queue` adapter). Chat needs a durable worker for jobs like failing stale completions — unlike the quieter sister apps, which run Active Job `:async` with no queue supervisor.
+
+YJIT stays **on**. Rails 8.1 enables it in production via `config.yjit`; the image also sets `RUBY_YJIT_ENABLE=1`. Leave it on.
+
 ---
 
 ## Cost (rough)

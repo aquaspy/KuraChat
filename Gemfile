@@ -26,7 +26,8 @@ gem "commonmarker", "~> 2.3"
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
-# Use the database-backed adapters for Rails.cache, Active Job, and Action Cable
+# Solid Cache, Queue, and Cable — Chat keeps Solid Queue in production for
+# durable jobs (e.g. failing stale completions).
 gem "solid_cache"
 gem "solid_queue"
 gem "solid_cable"
