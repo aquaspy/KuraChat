@@ -21,7 +21,7 @@ gem "tailwindcss-rails"
 gem "bcrypt", "~> 3.1.7"
 
 # Server-side markdown for assistant replies
-gem "commonmarker", "~> 2.3"
+gem "commonmarker", "~> 2.10"
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
