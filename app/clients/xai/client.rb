@@ -1,5 +1,6 @@
 require "net/http"
 require "json"
+require "openssl"
 
 module Xai
   class Error < StandardError; end
@@ -61,10 +62,12 @@ module Xai
       end
 
       def post_sse(path, body)
+        conn = http
+        conn.start
         req = Net::HTTP::Post.new(URI.join(BASE.to_s + "/", path.delete_prefix("/")))
         headers.each { |k, v| req[k] = v }
         req.body = JSON.generate(body)
-        http.request(req) do |res|
+        conn.request(req) do |res|
           raise Error, "http_#{res.code}" unless res.is_a?(Net::HTTPSuccess)
 
           buf = +""
@@ -83,6 +86,24 @@ module Xai
         end
       rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ETIMEDOUT
         raise TimeoutError, "timeout"
+      ensure
+        drop_connection(conn)
+      end
+
+      # Close the TCP/TLS socket immediately so the provider can stop generating
+      # (and billing output tokens) instead of draining the rest of the SSE.
+      def drop_connection(conn)
+        return unless conn
+
+        sock = conn.instance_variable_get(:@socket)
+        io = sock.respond_to?(:io) ? sock.io : sock
+        io.close if io && !io.closed?
+      rescue IOError, OpenSSL::SSL::SSLError
+        nil
+      ensure
+        conn.finish if conn.started?
+      rescue IOError
+        nil
       end
   end
 end
