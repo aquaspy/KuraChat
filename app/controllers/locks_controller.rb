@@ -20,9 +20,4 @@ class LocksController < ApplicationController
     lock_session
     redirect_to unlock_path
   end
-
-  def toggle_auto_lock
-    current_user.update!(auto_lock: !current_user.auto_lock?)
-    redirect_back fallback_location: root_path
-  end
 end

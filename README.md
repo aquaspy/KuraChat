@@ -14,7 +14,7 @@ Public chat products are optimized for engagement and billing. KuraChat is optim
 - **Web search is opt-in, per turn.** The composer has a **Web** toggle that defaults **off**. A casual message is one model call. Research is a deliberate switch — and a deliberate dollar.
 - **Your search provider, not theirs.** When Web is on, search goes to Kagi or Brave as *you* configured on the VPS — not a generic Bing layer buried in the model.
 - **Honest threat model.** Messages are plaintext SQLite on this server. They are sent to xAI to generate replies. Web turns also send a query (and page extracts) to the search provider. Share links let anyone with the URL read that chat. This is **not** end-to-end encryption.
-- **Same calm shell as the rest of Kura.** Cookie auth, idle lock, PWA offline *reads*, Compose bound to localhost, signup you can shut off.
+- **Same calm shell as the rest of Kura.** Cookie auth, idle lock (per device), PWA offline *reads*, Compose bound to localhost, signup you can shut off.
 
 It sits next to [KuraNotes](https://github.com/aquaspy/KuraNotes), [KuraHome](https://github.com/aquaspy/KuraHome), [KuraCalendar](https://github.com/aquaspy/KuraCalendar), and [KuraSpend](https://github.com/aquaspy/KuraSpend) — same family, **separate** volume and database. Notes never leave your VPS; chat *must* leave toward xAI. Mixing them would be the wrong kind of clever.
 

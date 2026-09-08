@@ -2,11 +2,16 @@ module Locking
   extend ActiveSupport::Concern
 
   IDLE_AFTER = 15.minutes
+  COOKIE_NAME = "kura_auto_lock"
 
-  def self.session_open?(session, user)
+  def self.auto_lock_enabled?(cookies)
+    cookies[COOKIE_NAME] == "1"
+  end
+
+  def self.session_open?(session, cookies)
     raw = session[:unlocked_at]
     return false if raw.blank?
-    return true unless user&.auto_lock?
+    return true unless auto_lock_enabled?(cookies)
 
     at = raw.is_a?(String) ? Time.zone.parse(raw) : raw
     at > IDLE_AFTER.ago
@@ -14,7 +19,7 @@ module Locking
 
   included do
     before_action :require_unlock
-    helper_method :unlocked?
+    helper_method :unlocked?, :auto_lock_enabled?
   end
 
   class_methods do
@@ -24,8 +29,12 @@ module Locking
   end
 
   private
+    def auto_lock_enabled?
+      Locking.auto_lock_enabled?(cookies)
+    end
+
     def unlocked?
-      Locking.session_open?(session, current_user)
+      Locking.session_open?(session, cookies)
     end
 
     def require_unlock

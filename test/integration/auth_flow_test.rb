@@ -36,10 +36,9 @@ class AuthFlowTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, "Entrar"
   end
 
-  test "auto lock is off by default and can be toggled" do
+  test "auto lock is off by default and is per-device via cookie" do
     user = User.create!(email: "lock@x.com", password: "secret-ok")
     post login_path, params: { email: user.email, password: "secret-ok" }
-    assert_not user.reload.auto_lock?
 
     get root_path
     assert_includes @response.body, "Turn on auto lock"
@@ -50,24 +49,14 @@ class AuthFlowTest < ActionDispatch::IntegrationTest
       assert_response :success
     end
 
-    post auto_lock_path
-    follow_redirect!
-    assert user.reload.auto_lock?
+    cookies[Locking::COOKIE_NAME] = "1"
+    get root_path
     assert_includes @response.body, "Turn off auto lock"
 
     travel 20.minutes do
       get root_path
       assert_redirected_to unlock_path
     end
-  end
-
-  test "auto lock cannot be toggled while locked" do
-    user = User.create!(email: "locked@x.com", password: "secret-ok")
-    post login_path, params: { email: user.email, password: "secret-ok" }
-    post lock_path
-    post auto_lock_path
-    assert_redirected_to unlock_path
-    assert_not user.reload.auto_lock?
   end
 
   test "portuguese auto lock labels" do

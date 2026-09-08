@@ -12,7 +12,6 @@ Rails.application.routes.draw do
   get  "unlock", to: "locks#show", as: :unlock
   post "unlock", to: "locks#create"
   post "lock", to: "locks#lock", as: :lock
-  post "auto_lock", to: "locks#toggle_auto_lock", as: :auto_lock
   resource :password, only: %i[edit update]
 
   resources :conversations, only: %i[index show create update destroy] do

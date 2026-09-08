@@ -3,7 +3,7 @@
 <%= button_to "", lock_path, method: :post, id: "lock-now", class: "sr-only", tabindex: -1, form: { id: "lock-now-form" } %>
 <% if notice %><p class="flash flash-notice" role="status"><%= notice %></p><% end %>
 <% if alert %><p class="flash flash-alert" role="alert"><%= alert %></p><% end %>
-<div class="app-shell <%= "is-editing" if @conversation %>" data-controller="layout lock offline confirm" data-lock-enabled-value="<%= current_user.auto_lock? %>">
+<div class="app-shell <%= "is-editing" if @conversation %>" data-controller="layout lock offline confirm" data-lock-enabled-value="<%= auto_lock_enabled? %>" data-lock-on-label-value="<%= t("app.auto_lock_on") %>" data-lock-off-label-value="<%= t("app.auto_lock_off") %>">
   <p class="offline-banner" data-offline-target="banner" hidden><%= t("chat.offline") %></p>
 
   <header class="mobile-top">
