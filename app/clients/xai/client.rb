@@ -62,6 +62,7 @@ module Xai
       end
 
       def post_sse(path, body)
+        conn = nil
         conn = http
         conn.start
         req = Net::HTTP::Post.new(URI.join(BASE.to_s + "/", path.delete_prefix("/")))
@@ -98,11 +99,8 @@ module Xai
         sock = conn.instance_variable_get(:@socket)
         io = sock.respond_to?(:io) ? sock.io : sock
         io.close if io && !io.closed?
-      rescue IOError, OpenSSL::SSL::SSLError
-        nil
-      ensure
         conn.finish if conn.started?
-      rescue IOError
+      rescue IOError, OpenSSL::SSL::SSLError
         nil
       end
   end
