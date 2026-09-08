@@ -13,7 +13,7 @@ class RepetitionGuardTest < ActiveSupport::TestCase
 
   test "detects closing mantra loops" do
     prose = "Aqui está a análise completa do caso.\n\n"
-    loop = (["Fim."] * 8 + ["Resposta."] * 4).join("\n")
+    loop = ([ "Fim." ] * 8 + [ "Resposta." ] * 4).join("\n")
     text = prose + loop
     assert_equal :closing_loop, ChatCompleter::RepetitionGuard.check(text)
     truncated = ChatCompleter::RepetitionGuard.truncate(text, :closing_loop)

@@ -41,8 +41,8 @@ class AuthFlowTest < ActionDispatch::IntegrationTest
     post login_path, params: { email: user.email, password: "secret-ok" }
 
     get root_path
-    assert_includes @response.body, "Turn on auto lock"
-    assert_not_includes @response.body, "Turn off auto lock"
+    assert_includes @response.body, "data-auto-lock-label>Turn on auto lock"
+    assert_not_includes @response.body, "data-auto-lock-label>Turn off auto lock"
 
     travel 20.minutes do
       get root_path
@@ -51,7 +51,7 @@ class AuthFlowTest < ActionDispatch::IntegrationTest
 
     cookies[Locking::COOKIE_NAME] = "1"
     get root_path
-    assert_includes @response.body, "Turn off auto lock"
+    assert_includes @response.body, "data-auto-lock-label>Turn off auto lock"
 
     travel 20.minutes do
       get root_path
