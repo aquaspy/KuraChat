@@ -24,7 +24,7 @@ class RepetitionGuardTest < ActiveSupport::TestCase
 
   test "detects repeated URLs" do
     url = "https://news.example/story"
-    text = "Intro.\n" + ([url] * 5).join("\n")
+    text = "Intro.\n" + ([ url ] * 5).join("\n")
     assert_equal :url_repeat, ChatCompleter::RepetitionGuard.check(text)
   end
 
