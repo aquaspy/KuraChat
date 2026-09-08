@@ -61,17 +61,19 @@ class ChatCompleterTest < ActiveSupport::TestCase
   end
 
   class RecordingXai
-    attr_reader :tool_choices, :reasoning_efforts
+    attr_reader :tool_choices, :reasoning_efforts, :max_tokens_seen
 
     def initialize
       @tool_choices = []
       @reasoning_efforts = []
+      @max_tokens_seen = []
       @n = 0
     end
 
-    def stream_chat(tool_choice: nil, reasoning_effort: nil, **)
+    def stream_chat(tool_choice: nil, reasoning_effort: nil, max_tokens: nil, **)
       @tool_choices << tool_choice
       @reasoning_efforts << reasoning_effort
+      @max_tokens_seen << max_tokens
       @n += 1
       chunks = if @n == 1
         [ { "choices" => [ { "delta" => { "tool_calls" => [ {
@@ -129,9 +131,10 @@ class ChatCompleterTest < ActiveSupport::TestCase
   end
 
   class PlainXai < RecordingXai
-    def stream_chat(tool_choice: nil, reasoning_effort: nil, **)
+    def stream_chat(tool_choice: nil, reasoning_effort: nil, max_tokens: nil, **)
       @tool_choices << tool_choice
       @reasoning_efforts << reasoning_effort
+      @max_tokens_seen << max_tokens
       [ { "choices" => [ { "delta" => { "content" => "Hi" }, "finish_reason" => "stop" } ] } ].each { |c| yield c }
     end
   end
@@ -142,6 +145,44 @@ class ChatCompleterTest < ActiveSupport::TestCase
     xai = PlainXai.new
     ChatCompleter.new(assistant, xai: xai).run
     assert_equal %w[low], xai.reasoning_efforts
+    assert_equal [ ChatCompleter::REPLY_MAX_TOKENS ], xai.max_tokens_seen
+  end
+
+  test "aborts citation-token loops and keeps the useful prose" do
+    pua = "\uE000"
+    prose = "Não existe garantia absoluta, mas dá para reduzir risco."
+    junk = 20.times.map { |i|
+      "#{pua}markdown:#{i + 1}#{pua}#{pua}l#{pua}https://example.com/a#{pua}#{pua}r#{pua}Fonte#{pua}"
+    }.join
+    @chat.messages.create!(role: "user", content: "Seguro?", web: true)
+    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+    xai = FakeXai.new(chunks: [
+      { "choices" => [ { "delta" => { "content" => prose } } ] },
+      { "choices" => [ { "delta" => { "content" => junk }, "finish_reason" => "stop" } ] }
+    ])
+    ChatCompleter.new(assistant, xai: xai, kagi: FakeKagi.new).run
+    assistant.reload
+    assert_equal "complete", assistant.status
+    assert_equal prose, assistant.content
+    assert_equal "truncated_repetition", assistant.error
+    assert_operator assistant.content.length, :<, 500
+  end
+
+  test "aborts closing mantra loops" do
+    prose = "Segue o resumo objetivo do que importa.\n\n"
+    mantra = ([ "Fim.\n", "Resposta.\n", "Resumo.\n" ] * 10).join
+    @chat.messages.create!(role: "user", content: "Resume")
+    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+    xai = FakeXai.new(chunks: [
+      { "choices" => [ { "delta" => { "content" => prose } } ] },
+      { "choices" => [ { "delta" => { "content" => mantra }, "finish_reason" => "length" } ] }
+    ])
+    ChatCompleter.new(assistant, xai: xai).run
+    assistant.reload
+    assert_equal "complete", assistant.status
+    assert_includes assistant.content, "resumo objetivo"
+    refute_match(/(Fim\.\n){4}/, assistant.content)
+    assert_equal "truncated_repetition", assistant.error
   end
 
   class EmptySearch

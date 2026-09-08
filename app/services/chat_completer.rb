@@ -1,11 +1,20 @@
 class ChatCompleter
   class Gone < StandardError; end
+  class RepetitionAbort < StandardError
+    attr_reader :reason
+
+    def initialize(reason)
+      @reason = reason
+      super(reason.to_s)
+    end
+  end
 
   MAX_TOOL_ROUNDS = 4
   MAX_SEARCHES = 3
   HEARTBEAT_EVERY = 60
   FLUSH_EVERY = 0.25
   FLUSH_CHARS = 80
+  REPLY_MAX_TOKENS = Integer(ENV.fetch("CHAT_REPLY_MAX_TOKENS", "4096"))
   WINDOW_MESSAGES = Integer(ENV.fetch("CHAT_WINDOW_MESSAGES", "40"))
   WINDOW_TOKENS   = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "32000"))
   KEEP_RECENT     = Integer(ENV.fetch("CHAT_KEEP_RECENT", "16"))
@@ -63,16 +72,30 @@ class ChatCompleter
       acc = Accumulator.new
       finish = nil
       payload = windowed_messages
-      stream_released(payload) { |chunk|
-        delta = chunk.dig("choices", 0, "delta") || {}
-        finish = chunk.dig("choices", 0, "finish_reason") || finish
-        acc.add_text(delta["content"]) if delta["content"]
-        acc.add_tool_calls(delta["tool_calls"]) if delta["tool_calls"]
-        checkout { flush!(acc) } if acc.flush_due?
-      }
+      begin
+        stream_released(payload) { |chunk|
+          delta = chunk.dig("choices", 0, "delta") || {}
+          finish = chunk.dig("choices", 0, "finish_reason") || finish
+          if delta["content"]
+            acc.add_text(delta["content"])
+            if (reason = RepetitionGuard.check(acc.text))
+              acc.abort!(reason)
+              raise RepetitionAbort, reason
+            end
+          end
+          acc.add_tool_calls(delta["tool_calls"]) if delta["tool_calls"]
+          checkout { flush!(acc) } if acc.flush_due?
+        }
+      rescue RepetitionAbort => e
+        Rails.logger.info("[ChatCompleter] repetition_abort message_id=#{@assistant.id} reason=#{e.reason}")
+        checkout { flush!(acc) }
+        checkout { html_complete!(citations, truncated: true); auto_title!; maybe_compact! }
+        break
+      end
       checkout { flush!(acc) }
+      Rails.logger.info("[ChatCompleter] finish_reason=#{finish.inspect} message_id=#{@assistant.id} chars=#{acc.text.length}")
 
-      if acc.tool_calls.empty? || finish == "stop"
+      if acc.tool_calls.empty?
         checkout { html_complete!(citations); auto_title!; maybe_compact! }
         break
       end
@@ -264,7 +287,14 @@ class ChatCompleter
         end
       end
       ActiveRecord::Base.connection_pool.release_connection
-      xai.stream_chat(messages: payload, tools: @tools, tool_choice: @tool_choice, reasoning_effort: reasoning_effort, &block)
+      xai.stream_chat(
+        messages: payload,
+        tools: @tools,
+        tool_choice: @tool_choice,
+        max_tokens: REPLY_MAX_TOKENS,
+        reasoning_effort: reasoning_effort,
+        &block
+      )
     ensure
       stop = true
     end
@@ -277,12 +307,15 @@ class ChatCompleter
       broadcast_body_plain
     end
 
-    def html_complete!(citations)
-      @assistant.update!(
+    def html_complete!(citations, truncated: false)
+      body = RepetitionGuard.strip_junk(@assistant.content.to_s)
+      attrs = {
         status: "complete",
-        content: @assistant.content.to_s,
+        content: body,
         citations: citations.uniq { |c| c["url"] || c[:url] }
-      )
+      }
+      attrs[:error] = "truncated_repetition" if truncated
+      @assistant.update!(attrs)
       broadcast_message
     end
 
@@ -439,20 +472,37 @@ class ChatCompleter
     end
 
     class Accumulator
-      attr_reader :text, :tool_calls
+      attr_reader :text, :tool_calls, :abort_reason
 
       def initialize
         @text = +""
         @tool_calls = []
         @last_flush = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         @flushed_len = 0
+        @aborted = false
+        @abort_reason = nil
+      end
+
+      def aborted?
+        @aborted
       end
 
       def add_text(chunk)
+        return if @aborted
+
         @text << chunk.to_s
       end
 
+      def abort!(reason)
+        @aborted = true
+        @abort_reason = reason
+        @text = RepetitionGuard.truncate(@text, reason)
+        @text = RepetitionGuard.strip_junk(@text)
+      end
+
       def add_tool_calls(deltas)
+        return if @aborted
+
         Array(deltas).each do |delta|
           i = (delta["index"] || delta[:index] || 0).to_i
           @tool_calls[i] ||= { "id" => nil, "type" => "function", "function" => { "name" => +"", "arguments" => +"" } }

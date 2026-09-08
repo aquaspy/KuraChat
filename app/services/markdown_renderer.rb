@@ -4,7 +4,8 @@ class MarkdownRenderer
   ALLOWED_ATTR = { "a" => %w[href], "code" => %w[class] }.freeze
 
   def self.render(markdown)
-    html = Commonmarker.to_html(markdown.to_s, options: {
+    text = ChatCompleter::RepetitionGuard.strip_junk(markdown)
+    html = Commonmarker.to_html(text, options: {
       extension: { table: true, strikethrough: true, autolink: true, tasklist: false },
       render: { unsafe: false, github_pre_lang: true }
     })

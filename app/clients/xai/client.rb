@@ -14,7 +14,7 @@ module Xai
       raise Error, "missing_key" if @api_key.blank?
     end
 
-    def stream_chat(messages:, tools: nil, tool_choice: nil, max_tokens: 8192,
+    def stream_chat(messages:, tools: nil, tool_choice: nil, max_tokens: 4096,
                     reasoning_effort: ENV.fetch("XAI_REASONING_EFFORT", "low"), &block)
       body = { model: @model, messages: messages, stream: true, max_tokens: max_tokens, reasoning_effort: reasoning_effort }
       if tools.present?
