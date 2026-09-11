@@ -151,11 +151,11 @@ YJIT stays **on**. Rails 8.1 enables it in production via `config.yjit`; the ima
 
 ## Cost (rough)
 
-A casual grok-4.3 turn is about **$0.0045**. Turning **Web** on lets Grok call xAI `web_search` (~**$5 / 1k calls**, so about **$0.005** per search) plus the extra tokens from browsing. Grok decides how many searches, if any.
+A casual grok-4.3 turn is about **$0.0045**. Turning **Web** on lets Grok call xAI `web_search` (~**$5 / 1k calls**, so about **$0.005** per search) plus the extra tokens from browsing. Grok decides how many searches, if any. There is **no** search intensity setting (no off/low/medium/high for the web tool).
 
 The Web toggle defaults **off**. Long chats are compacted automatically: Grok sees the last 16 visible messages plus a short rolling summary. The full transcript stays in SQLite.
 
-Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads what it found; model-only turns stay on `low`.
+`XAI_REASONING_EFFORT` / `XAI_WEB_REASONING_EFFORT` are **how hard the model thinks** (`none` / `low` / `medium` / `high` / `xhigh`), not how much it searches. Defaults: `low` without Web, `medium` with Web so Grok can actually use what it found. Set them on the VPS; the UI only has the Web switch.
 
 ---
 
@@ -187,8 +187,8 @@ Do not commit `config/master.key`.
 | `SECRET_KEY_BASE` | Session cookies (Compose). `openssl rand -hex 64` |
 | `XAI_API_KEY` | Required to generate replies |
 | `XAI_MODEL` | Default `grok-4.3`. `grok-4.6` is stronger at tools |
-| `XAI_REASONING_EFFORT` | Default `low` (model-only turns) |
-| `XAI_WEB_REASONING_EFFORT` | Default `medium` (Web turns) |
+| `XAI_REASONING_EFFORT` | How hard Grok thinks on model-only turns. Default `low`. Not search volume. |
+| `XAI_WEB_REASONING_EFFORT` | Same, but for Web-on turns. Default `medium`. Still not search volume — Grok picks how much to search. |
 | `CHAT_REPLY_MAX_TOKENS` | Optional hard cap on reply length. Unset = no cap |
 | `SIGNUP_ENABLED` | Public signup. Turn off after the first account |
 | `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |
