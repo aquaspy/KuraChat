@@ -2,8 +2,9 @@ require "test_helper"
 
 class ChatCompleterTest < ActiveSupport::TestCase
   class FakeXai
-    def initialize(chunks:, title: "Short title")
+    def initialize(chunks: [], events: nil, title: "Short title")
       @chunks = chunks
+      @events = events
       @title = title
     end
 
@@ -11,14 +12,12 @@ class ChatCompleterTest < ActiveSupport::TestCase
       @chunks.each { |chunk| yield chunk }
     end
 
+    def stream_response(**)
+      (@events || []).each { |event| yield event }
+    end
+
     def chat(**)
       { "choices" => [ { "message" => { "content" => @title } } ] }
-    end
-  end
-
-  class FakeKagi
-    def search(**)
-      [ { title: "Kagi", url: "https://kagi.com", date: "", snippet: "Search" } ]
     end
   end
 
@@ -61,29 +60,43 @@ class ChatCompleterTest < ActiveSupport::TestCase
   end
 
   class RecordingXai
-    attr_reader :tool_choices, :reasoning_efforts, :max_tokens_seen
+    attr_reader :calls, :reasoning_efforts, :max_tokens_seen
 
     def initialize
-      @tool_choices = []
+      @calls = []
       @reasoning_efforts = []
       @max_tokens_seen = []
-      @n = 0
     end
 
-    def stream_chat(tool_choice: nil, reasoning_effort: nil, max_tokens: nil, **)
-      @tool_choices << tool_choice
+    def stream_chat(reasoning_effort: nil, max_tokens: nil, **)
+      @calls << :stream_chat
       @reasoning_efforts << reasoning_effort
       @max_tokens_seen << max_tokens
-      @n += 1
-      chunks = if @n == 1
-        [ { "choices" => [ { "delta" => { "tool_calls" => [ {
-          "index" => 0, "id" => "call_1", "type" => "function",
-          "function" => { "name" => "web_search", "arguments" => "{\"query\":\"news\"}" }
-        } ] }, "finish_reason" => "tool_calls" } ] } ]
-      else
-        [ { "choices" => [ { "delta" => { "content" => "Here." }, "finish_reason" => "stop" } ] } ]
-      end
-      chunks.each { |c| yield c }
+      [ { "choices" => [ { "delta" => { "content" => "Hi" }, "finish_reason" => "stop" } ] } ].each { |c| yield c }
+    end
+
+    def stream_response(input:, tools:, store: false, reasoning_effort: nil, max_output_tokens: nil, **)
+      @calls << { method: :stream_response, input: input, tools: tools, store: store, max_output_tokens: max_output_tokens }
+      @reasoning_efforts << reasoning_effort
+      @max_tokens_seen << max_output_tokens
+      [
+        { "type" => "response.web_search_call.in_progress" },
+        { "type" => "response.output_text.delta", "delta" => "Here." },
+        {
+          "type" => "response.completed",
+          "response" => {
+            "citations" => [ "https://example.com/news" ],
+            "output" => [ {
+              "type" => "message",
+              "content" => [ {
+                "type" => "output_text",
+                "text" => "Here.",
+                "annotations" => [ { "type" => "url_citation", "url" => "https://example.com/news", "title" => "1" } ]
+              } ]
+            } ]
+          }
+        }
+      ].each { |e| yield e }
     end
 
     def chat(**)
@@ -91,61 +104,49 @@ class ChatCompleterTest < ActiveSupport::TestCase
     end
   end
 
-  test "web turn persists hidden tool rows and a legal window" do
+  test "web turn uses Responses web_search and stores citations" do
     @chat.messages.create!(role: "user", content: "News?", web: true)
     assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
 
     xai = RecordingXai.new
-    ChatCompleter.new(assistant, xai: xai, kagi: FakeKagi.new).run
+    ChatCompleter.new(assistant, xai: xai).run
     assistant.reload
     assert_equal "complete", assistant.status
     assert_equal "Here.", assistant.content
-    assert_equal 1, @chat.messages.where(role: "tool").count
-    parsed = JSON.parse(@chat.messages.find_by(role: "tool").content)
-    assert_equal 1, parsed["results"][0]["n"]
-    assert_equal "Kagi", parsed["results"][0]["title"]
-    hidden = @chat.messages.reload.find(&:tool_calls?)
-    assert_equal "complete", hidden.status
-
-    payload = ChatCompleter.new(assistant, xai: xai).windowed_messages
-    roles = payload.map { |m| m[:role] || m["role"] }
+    assert_equal 0, @chat.messages.where(role: "tool").count
+    refute @chat.messages.reload.any?(&:tool_calls?)
+    assert_equal [ { "title" => "example.com", "url" => "https://example.com/news" } ], assistant.citations
+    call = xai.calls.find { |c| c.is_a?(Hash) && c[:method] == :stream_response }
+    assert_equal [ { type: "web_search" } ], call[:tools]
+    assert_nil call[:max_output_tokens]
+    assert_equal %w[medium], xai.reasoning_efforts
+    roles = call[:input].map { |m| m[:role] }
     assert_includes roles, "system"
-    assert_includes roles, "tool"
-    assert payload.any? { |m| m[:tool_calls] }
-    refute payload.any? { |m| m[:role] == "assistant" && m[:content] == "" && m[:tool_calls].blank? }
-    assert_equal %w[required auto], xai.tool_choices
-    assert_equal %w[medium medium], xai.reasoning_efforts
+    assert_includes roles, "user"
+    refute_includes roles, "tool"
   end
 
-  test "web turn system prompt tells the model to search" do
+  test "web turn system prompt offers search without requiring a tool call" do
     @chat.messages.create!(role: "user", content: "News?", web: true)
     assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
-    payload = ChatCompleter.new(assistant, xai: FakeXai.new(chunks: [])).windowed_messages
+    payload = ChatCompleter.new(assistant, xai: FakeXai.new).windowed_messages
     system = payload.first[:content]
-    assert_match(/live web access this turn/i, system)
+    assert_match(/live web search this turn/i, system)
+    refute_match(/Call web_search before answering/i, system)
     refute_match(/no live web access/i, system)
     assert_match(/Current date: \d{4}-\d{2}-\d{2}/, system)
     assert_includes system, "America/Sao_Paulo"
-    refute_match(/Do not search for general knowledge/i, ChatCompleter::WEB_SEARCH_TOOL.dig(:function, :description))
-    assert_match(/search-engine query/i, ChatCompleter::WEB_SEARCH_TOOL.dig(:function, :description))
+    assert_equal({ type: "web_search" }, ChatCompleter::WEB_SEARCH_TOOL)
   end
 
-  class PlainXai < RecordingXai
-    def stream_chat(tool_choice: nil, reasoning_effort: nil, max_tokens: nil, **)
-      @tool_choices << tool_choice
-      @reasoning_efforts << reasoning_effort
-      @max_tokens_seen << max_tokens
-      [ { "choices" => [ { "delta" => { "content" => "Hi" }, "finish_reason" => "stop" } ] } ].each { |c| yield c }
-    end
-  end
-
-  test "plain turns keep low reasoning effort" do
+  test "plain turns keep low reasoning effort and omit max_tokens" do
     @chat.messages.create!(role: "user", content: "Hi")
     assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
-    xai = PlainXai.new
+    xai = RecordingXai.new
     ChatCompleter.new(assistant, xai: xai).run
+    assert_equal [ :stream_chat ], xai.calls
     assert_equal %w[low], xai.reasoning_efforts
-    assert_equal [ ChatCompleter::REPLY_MAX_TOKENS ], xai.max_tokens_seen
+    assert_equal [ nil ], xai.max_tokens_seen
   end
 
   test "aborts citation-token loops and keeps the useful prose" do
@@ -156,11 +157,12 @@ class ChatCompleterTest < ActiveSupport::TestCase
     }.join
     @chat.messages.create!(role: "user", content: "Seguro?", web: true)
     assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
-    xai = FakeXai.new(chunks: [
-      { "choices" => [ { "delta" => { "content" => prose } } ] },
-      { "choices" => [ { "delta" => { "content" => junk }, "finish_reason" => "stop" } ] }
+    xai = FakeXai.new(events: [
+      { "type" => "response.output_text.delta", "delta" => prose },
+      { "type" => "response.output_text.delta", "delta" => junk },
+      { "type" => "response.completed", "response" => { "citations" => [] } }
     ])
-    ChatCompleter.new(assistant, xai: xai, kagi: FakeKagi.new).run
+    ChatCompleter.new(assistant, xai: xai).run
     assistant.reload
     assert_equal "complete", assistant.status
     assert_equal prose, assistant.content
@@ -183,21 +185,6 @@ class ChatCompleterTest < ActiveSupport::TestCase
     assert_includes assistant.content, "resumo objetivo"
     refute_match(/(Fim\.\n){4}/, assistant.content)
     assert_equal "truncated_repetition", assistant.error
-  end
-
-  class EmptySearch
-    def search(**)
-      []
-    end
-  end
-
-  test "empty search tells the model to try another query" do
-    @chat.messages.create!(role: "user", content: "News?", web: true)
-    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
-    ChatCompleter.new(assistant, xai: RecordingXai.new, kagi: EmptySearch.new).run
-    parsed = JSON.parse(@chat.messages.find_by(role: "tool").content)
-    assert_equal [], parsed["results"]
-    assert_match(/No results/i, parsed["note"])
   end
 
   test "compacts older turns into a stored summary" do
@@ -234,12 +221,16 @@ class ChatCompleterTest < ActiveSupport::TestCase
     @chat.messages.create!(role: "assistant", status: "complete", content: "Found it.")
     later = @chat.messages.create!(role: "user", content: "thanks")
     current = @chat.messages.create!(role: "assistant", status: "pending", content: "")
-    payload = ChatCompleter.new(current).windowed_messages
+    completer = ChatCompleter.new(current)
+    payload = completer.windowed_messages
     tool = payload.find { |m| m[:role] == "tool" }
     assert tool
     parsed = JSON.parse(tool[:content])
     assert_equal "A", parsed["results"][0]["title"]
     assert_nil parsed["results"][0]["snippet"]
+    input = completer.response_input(payload)
+    refute input.any? { |m| m[:role] == "tool" }
+    refute input.any? { |m| m[:tool_calls] }
     assert early_user && later
   end
 
@@ -254,5 +245,23 @@ class ChatCompleterTest < ActiveSupport::TestCase
     payload = ChatCompleter.new(current).windowed_messages
     refute payload.any? { |m| m[:tool_calls] }
     refute payload.any? { |m| m[:role] == "tool" }
+  end
+
+  test "citations_from dedupes urls from citations and annotations" do
+    rows = ChatCompleter.citations_from(
+      "citations" => [ "https://a.example", "https://a.example" ],
+      "output" => [ {
+        "content" => [ {
+          "annotations" => [
+            { "url" => "https://a.example", "title" => "1" },
+            { "url" => "https://b.example", "title" => "News" }
+          ]
+        } ]
+      } ]
+    )
+    assert_equal [
+      { "title" => "a.example", "url" => "https://a.example" },
+      { "title" => "News", "url" => "https://b.example" }
+    ], rows
   end
 end

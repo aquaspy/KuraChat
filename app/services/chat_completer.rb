@@ -1,3 +1,5 @@
+require "uri"
+
 class ChatCompleter
   class Gone < StandardError; end
   class RepetitionAbort < StandardError
@@ -9,49 +11,24 @@ class ChatCompleter
     end
   end
 
-  MAX_TOOL_ROUNDS = 4
-  MAX_SEARCHES = 3
   HEARTBEAT_EVERY = 60
   FLUSH_EVERY = 0.25
   FLUSH_CHARS = 80
-  REPLY_MAX_TOKENS = Integer(ENV.fetch("CHAT_REPLY_MAX_TOKENS", "4096"))
   WINDOW_MESSAGES = Integer(ENV.fetch("CHAT_WINDOW_MESSAGES", "40"))
   WINDOW_TOKENS   = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "32000"))
   KEEP_RECENT     = Integer(ENV.fetch("CHAT_KEEP_RECENT", "16"))
-
-  WEB_SEARCH_TOOL = {
-    type: "function",
-    function: {
-      name: "web_search",
-      description: "Search the live web and read extracted page content. Write a search-engine query, not the user's sentence: include names, places, years, and product versions. Query in Portuguese for Brazilian news, prices, services, and local topics; query in English for docs, papers, software, and global products. Use recency=day for breaking news, week for recent events, month for ongoing stories; omit recency for evergreen facts. If the first results do not answer the question, search again with a different query.",
-      parameters: {
-        type: "object",
-        properties: {
-          query: { type: "string", description: "Search-engine query with key entities and dates" },
-          recency: {
-            type: "string",
-            enum: %w[day week month any],
-            description: "Optional recency. Omit or any for no time filter."
-          }
-        },
-        required: [ "query" ]
-      }
-    }
-  }.freeze
+  WEB_SEARCH_TOOL = { type: "web_search" }.freeze
 
   def self.broadcast_failed(message)
     new(message, locale: I18n.locale).broadcast_failed
   end
 
-  def initialize(assistant_message, locale: I18n.default_locale, region: nil, xai: nil, search: nil, kagi: nil)
+  def initialize(assistant_message, locale: I18n.default_locale, xai: nil)
     @assistant = assistant_message
     @conversation = assistant_message.conversation
     @locale = locale
-    @region = WebSearch.normalize_region(region) || WebSearch.region_from_locale(locale)
     @user_message = @conversation.messages.where(role: "user").where("id < ?", @assistant.id).last
-    @searches = 0
     @xai = xai
-    @search = search || kagi
   end
 
   def run
@@ -60,57 +37,26 @@ class ChatCompleter
     @assistant.update!(status: "streaming")
     broadcast_status(web? ? I18n.t("chat.searching") : I18n.t("chat.thinking"))
 
-    @tools = web? ? [ WEB_SEARCH_TOOL ] : nil
-    @tool_choice = web? ? "required" : nil
+    acc = Accumulator.new
     citations = []
-    rounds = 0
-
-    loop do
-      rounds += 1
-      raise "tool loop overflow" if rounds > MAX_TOOL_ROUNDS
-
-      acc = Accumulator.new
-      finish = nil
-      payload = windowed_messages
-      begin
-        stream_released(payload) { |chunk|
-          delta = chunk.dig("choices", 0, "delta") || {}
-          finish = chunk.dig("choices", 0, "finish_reason") || finish
-          if delta["content"]
-            acc.add_text(delta["content"])
-            if (reason = RepetitionGuard.check(acc.text))
-              acc.abort!(reason)
-              raise RepetitionAbort, reason
-            end
-          end
-          acc.add_tool_calls(delta["tool_calls"]) if delta["tool_calls"]
-          checkout { flush!(acc) } if acc.flush_due?
-        }
-      rescue RepetitionAbort => e
-        Rails.logger.info("[ChatCompleter] repetition_abort message_id=#{@assistant.id} reason=#{e.reason}")
-        checkout { flush!(acc) }
-        checkout { html_complete!(citations, truncated: true); auto_title!; maybe_compact! }
-        break
-      end
-      checkout { flush!(acc) }
-      Rails.logger.info("[ChatCompleter] finish_reason=#{finish.inspect} message_id=#{@assistant.id} chars=#{acc.text.length}")
-
-      if acc.tool_calls.empty?
-        checkout { html_complete!(citations); auto_title!; maybe_compact! }
-        break
-      end
-
-      checkout do
-        persist_hidden_tool_calls(acc.tool_calls)
-        acc.tool_calls.each do |tc|
-          result, cites = execute_tool(tc)
-          citations.concat(cites)
-          persist_tool_result(tc, result)
+    truncated = false
+    payload = windowed_messages
+    begin
+      stream_released(payload) { |chunk|
+        if web?
+          apply_response_event!(chunk, acc, citations)
+        else
+          apply_chat_chunk!(chunk, acc)
         end
-        @tool_choice = "auto"
-        broadcast_status(I18n.t("chat.searching"))
-      end
+        checkout { flush!(acc) } if acc.flush_due?
+      }
+    rescue RepetitionAbort => e
+      Rails.logger.info("[ChatCompleter] repetition_abort message_id=#{@assistant.id} reason=#{e.reason}")
+      truncated = true
     end
+    checkout { flush!(acc) }
+    Rails.logger.info("[ChatCompleter] message_id=#{@assistant.id} chars=#{acc.text.length} web=#{web?}")
+    checkout { html_complete!(citations, truncated: truncated || acc.aborted?); auto_title!; maybe_compact! }
   rescue ChatCompleter::Gone
     nil
   rescue => e
@@ -142,6 +88,19 @@ class ChatCompleter
       est += cost
     end
     [ { role: "system", content: prompt }, *picked ]
+  end
+
+  def response_input(messages = windowed_messages)
+    messages.filter_map { |message|
+      role = message[:role] || message["role"]
+      next unless role.in?(%w[system user assistant])
+      next if message[:tool_calls].present? || message["tool_calls"].present?
+
+      content = message[:content] || message["content"]
+      next if content.blank? && role == "assistant"
+
+      { role: role, content: content.to_s }
+    }
   end
 
   def group_history(rows)
@@ -217,6 +176,13 @@ class ChatCompleter
       end
     end
 
+    def reply_max_tokens
+      raw = ENV["CHAT_REPLY_MAX_TOKENS"].to_s.strip
+      return nil if raw.empty?
+
+      Integer(raw)
+    end
+
     def maybe_compact!
       visible = @conversation.messages.transcript.chronological.where("id < ?", @assistant.id).to_a
       return if visible.size <= KEEP_RECENT
@@ -261,10 +227,6 @@ class ChatCompleter
       @xai ||= Xai::Client.new
     end
 
-    def search_client
-      @search ||= WebSearch.client
-    end
-
     def gone?
       !Message.exists?(@assistant.id)
     end
@@ -287,16 +249,119 @@ class ChatCompleter
         end
       end
       ActiveRecord::Base.connection_pool.release_connection
-      xai.stream_chat(
-        messages: payload,
-        tools: @tools,
-        tool_choice: @tool_choice,
-        max_tokens: REPLY_MAX_TOKENS,
-        reasoning_effort: reasoning_effort,
-        &block
-      )
+      if web?
+        xai.stream_response(
+          input: response_input(payload),
+          tools: [ WEB_SEARCH_TOOL ],
+          max_output_tokens: reply_max_tokens,
+          reasoning_effort: reasoning_effort,
+          &block
+        )
+      else
+        xai.stream_chat(
+          messages: payload,
+          max_tokens: reply_max_tokens,
+          reasoning_effort: reasoning_effort,
+          &block
+        )
+      end
     ensure
       stop = true
+    end
+
+    def apply_chat_chunk!(chunk, acc)
+      delta = chunk.dig("choices", 0, "delta") || {}
+      return unless delta["content"]
+
+      acc.add_text(delta["content"])
+      if (reason = RepetitionGuard.check(acc.text))
+        acc.abort!(reason)
+        raise RepetitionAbort, reason
+      end
+    end
+
+    def apply_response_event!(event, acc, citations)
+      type = event["type"].to_s
+      if type == "response.failed" || event["error"].present? && type.end_with?("failed")
+        raise Xai::Error, event.dig("response", "error", "message") || event.dig("error", "message") || "generation_failed"
+      end
+
+      if type.include?("web_search")
+        checkout { broadcast_status(I18n.t("chat.searching")) }
+      end
+
+      delta = response_text_delta(event)
+      if delta.present?
+        acc.add_text(delta)
+        if (reason = RepetitionGuard.check(acc.text))
+          acc.abort!(reason)
+          raise RepetitionAbort, reason
+        end
+      end
+
+      return unless type == "response.completed" || event["response"].is_a?(Hash) && type.end_with?("completed")
+
+      citations.replace(self.class.citations_from(event["response"] || event))
+    end
+
+    def response_text_delta(event)
+      return event["delta"] if event["type"].to_s.end_with?("output_text.delta") && event["delta"].is_a?(String)
+
+      delta = event["delta"]
+      return delta["text"] if delta.is_a?(Hash) && delta["text"].present?
+
+      nil
+    end
+
+    def self.citations_from(response)
+      return [] unless response.is_a?(Hash)
+
+      seen = {}
+      rows = []
+      Array(response["citations"]).each { |item| push_citation!(rows, seen, item) }
+      Array(response["output"]).each do |item|
+        Array(item.is_a?(Hash) ? item["content"] : nil).each do |part|
+          next unless part.is_a?(Hash)
+
+          Array(part["annotations"]).each { |ann| push_citation!(rows, seen, ann) }
+        end
+      end
+      rows
+    end
+
+    def self.push_citation!(rows, seen, item)
+      url = nil
+      title = nil
+      case item
+      when String
+        url = item
+      when Hash
+        url = item["url"] || item[:url]
+        title = item["title"] || item[:title]
+      end
+      url = url.to_s.strip
+      return if url.blank?
+
+      label = citation_title(url, title)
+      if seen[url]
+        row = rows.find { |r| r["url"] == url }
+        if row && label.present? && (row["title"].blank? || row["title"] == url)
+          row["title"] = label
+        end
+        return
+      end
+
+      seen[url] = true
+      rows << { "title" => label, "url" => url }
+    end
+
+    def self.citation_title(url, title)
+      raw = title.to_s.strip
+      return raw unless raw.blank? || raw.match?(/\A\d+\z/)
+
+      URI.parse(url).host.presence || url
+    rescue URI::InvalidURIError
+      url
     end
 
     def flush!(acc)
@@ -368,72 +433,6 @@ class ChatCompleter
       text.to_s.strip.split(/\s+/).first(8).join(" ").truncate(60, omission: "")
     end
 
-    def persist_hidden_tool_calls(tool_calls)
-      @conversation.messages.create!(
-        role: "assistant",
-        status: "complete",
-        content: nil,
-        raw: { "tool_calls" => tool_calls }
-      )
-    end
-
-    def persist_tool_result(tool_call, result)
-      id = tool_call["id"] or raise ArgumentError, "missing tool_call id"
-      @conversation.messages.create!(
-        role: "tool",
-        content: result.is_a?(String) ? result : JSON.generate(result),
-        raw: { "tool_call_id" => id, "name" => tool_call.dig("function", "name") }
-      )
-    end
-
-    def execute_tool(tc)
-      name = tc.dig("function", "name")
-      args = JSON.parse(tc.dig("function", "arguments").presence || "{}")
-      return [ { "error" => "unknown_tool" }, [] ] unless name == "web_search"
-      return [ { "error" => "search_budget_exhausted" }, [] ] if @searches >= MAX_SEARCHES
-
-      @searches += 1
-      query = args["query"].to_s
-      recency = args["recency"]
-      results = with_heartbeat { search_client.search(query: query, recency: recency, region: @region) }
-      cites = results.map { |r| { "title" => r[:title], "url" => r[:url] } }
-      payload = {
-        "query" => query,
-        "results" => results.each_with_index.map { |row, i|
-          {
-            "n" => i + 1,
-            "title" => row[:title],
-            "url" => row[:url],
-            "site" => row[:site],
-            "date" => row[:date],
-            "snippet" => row[:snippet]
-          }.compact_blank
-        }
-      }
-      payload["note"] = "No results. Search again with a different query." if results.empty?
-      [ payload, cites ]
-    rescue WebSearch::Error, JSON::ParserError => e
-      Rails.logger.error("[ChatCompleter] search #{e.class}: #{e.message} #{e.respond_to?(:code) ? e.code : nil}")
-      [ { "error" => "search_failed", "note" => "Live search failed. Say so; do not invent sources." }, [] ]
-    end
-
-    def with_heartbeat
-      stop = false
-      Thread.new do
-        loop do
-          sleep HEARTBEAT_EVERY
-          break if stop
-          checkout { @assistant.update_columns(updated_at: Time.current) }
-        rescue ChatCompleter::Gone
-          break
-        end
-      end
-      ActiveRecord::Base.connection_pool.release_connection
-      yield
-    ensure
-      stop = true
-    end
-
     def fail!(error)
       return if gone?
 
@@ -472,11 +471,10 @@ class ChatCompleter
     end
 
     class Accumulator
-      attr_reader :text, :tool_calls, :abort_reason
+      attr_reader :text, :abort_reason
 
       def initialize
         @text = +""
-        @tool_calls = []
         @last_flush = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         @flushed_len = 0
         @aborted = false
@@ -498,21 +496,6 @@ class ChatCompleter
         @abort_reason = reason
         @text = RepetitionGuard.truncate(@text, reason)
         @text = RepetitionGuard.strip_junk(@text)
-      end
-
-      def add_tool_calls(deltas)
-        return if @aborted
-
-        Array(deltas).each do |delta|
-          i = (delta["index"] || delta[:index] || 0).to_i
-          @tool_calls[i] ||= { "id" => nil, "type" => "function", "function" => { "name" => +"", "arguments" => +"" } }
-          slot = @tool_calls[i]
-          slot["id"] = delta["id"] if delta["id"].present?
-          slot["type"] = delta["type"] if delta["type"].present?
-          fn = delta["function"] || {}
-          slot["function"]["name"] << fn["name"].to_s
-          slot["function"]["arguments"] << fn["arguments"].to_s
-        end
       end
 
       def flush_due?

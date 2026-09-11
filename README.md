@@ -2,7 +2,7 @@
 
 **A calm place to talk to Grok — on a machine you own.**
 
-KuraChat is a self-hosted chat PWA. One SQLite file, no Redis, no third-party chat UI logging your prompts into someone else's product. You bring an [xAI](https://console.x.ai) API key; optionally you bring [Kagi](https://kagi.com) or [Brave](https://brave.com/search/api/) for web search. Keys stay on the server. Conversations sync across your devices because they live in *your* database.
+KuraChat is a self-hosted chat PWA. One SQLite file, no Redis, no third-party chat UI logging your prompts into someone else's product. You bring an [xAI](https://console.x.ai) API key. Keys stay on the server. Conversations sync across your devices because they live in *your* database.
 
 ---
 
@@ -11,9 +11,9 @@ KuraChat is a self-hosted chat PWA. One SQLite file, no Redis, no third-party ch
 Public chat products are optimized for engagement and billing. KuraChat is optimized for **quality replies** and **obvious cost**.
 
 - **Grok for writing and reasoning.** The model is xAI Grok (default `grok-4.3`). You can pin a stronger model with env if you want.
-- **Web search is opt-in, per turn.** The composer has a **Web** toggle that defaults **off**. A casual message is one model call. Research is a deliberate switch — and a deliberate dollar.
-- **Your search provider, not theirs.** When Web is on, search goes to Kagi or Brave as *you* configured on the VPS — not a generic Bing layer buried in the model.
-- **Honest threat model.** Messages are plaintext SQLite on this server. They are sent to xAI to generate replies. Web turns also send a query (and page extracts) to the search provider. Share links let anyone with the URL read that chat. This is **not** end-to-end encryption.
+- **Web search is opt-in, per turn.** The composer has a **Web** toggle that defaults **off**. A casual message is one model call. Research is a deliberate switch — and a deliberate dollar. Grok decides whether to search and how much.
+- **Same bill as the model.** When Web is on, Grok uses xAI's server-side `web_search` on your existing `XAI_API_KEY`. No second search vendor.
+- **Honest threat model.** Messages are plaintext SQLite on this server. They are sent to xAI to generate replies. Web turns also send queries through xAI's search (and from there onto the public web). The app always sets `store=false`, so xAI is not asked to keep the chat. Optional Zero Data Retention is a team setting on the xAI console, not a model name. Share links let anyone with the URL read that chat. This is **not** end-to-end encryption.
 - **Same calm shell as the rest of Kura.** Cookie auth, idle lock (per device), PWA offline *reads*, Compose bound to localhost, signup you can shut off.
 
 It sits next to [KuraNotes](https://github.com/aquaspy/KuraNotes), [KuraHome](https://github.com/aquaspy/KuraHome), [KuraCalendar](https://github.com/aquaspy/KuraCalendar), and [KuraSpend](https://github.com/aquaspy/KuraSpend) — same family, **separate** volume and database. Notes never leave your VPS; chat *must* leave toward xAI. Mixing them would be the wrong kind of clever.
@@ -50,11 +50,6 @@ XAI_API_KEY=xai-...       # from https://console.x.ai
 SIGNUP_ENABLED=true       # first account, then false
 FORCE_SSL=false           # true once HTTPS terminates in front
 BIND=127.0.0.1:3000
-
-# Optional web search (provider is chosen here — the UI only toggles on/off)
-# WEB_SEARCH_PROVIDER=kagi   # or brave
-# KAGI_API_KEY=...
-# BRAVE_API_KEY=...
 ```
 
 Then:
@@ -156,29 +151,11 @@ YJIT stays **on**. Rails 8.1 enables it in production via `config.yjit`; the ima
 
 ## Cost (rough)
 
-A casual grok-4.3 turn is about **$0.0045**. Turning **Web** on adds a search call.
+A casual grok-4.3 turn is about **$0.0045**. Turning **Web** on lets Grok call xAI `web_search` (~**$5 / 1k calls**, so about **$0.005** per search) plus the extra tokens from browsing. Grok decides how many searches, if any.
 
-| Provider | Extra ballpark per Web turn |
-| --- | --- |
-| **Kagi** | Search ($12 / 1k) + up to 3 page extracts ($4 / 1k pages) ≈ **$0.024** |
-| **Brave** | One request: LLM Context when the key’s plan includes it, otherwise Web Search (~$5 / 1k on the Search plan, with monthly credit) |
+The Web toggle defaults **off**. Long chats are compacted automatically: Grok sees the last 16 visible messages plus a short rolling summary. The full transcript stays in SQLite.
 
-The Web toggle defaults **off**. Long chats are compacted automatically: Grok sees the last 16 visible messages plus a short rolling summary. Old search extracts are not resent. The full transcript stays in SQLite.
-
-The UI does not name the provider. Pick it on the VPS with `WEB_SEARCH_PROVIDER=kagi` or `brave`, plus the matching API key. Set `KAGI_EXTRACT_COUNT=1` or `0` for cheaper Kagi turns.
-
-Search region follows the browser `Accept-Language` (`pt-BR` → Brazil, `pt-PT` → Portugal, `en-GB` → UK; bare Portuguese defaults to **BR**; bare English is left unset). Pin everyone with `SEARCH_REGION=BR`, or per provider with `KAGI_REGION` / `BRAVE_COUNTRY` (`ALL` turns the filter off). Leave `BRAVE_SEARCH_LANG` unset so global/tech queries are not stuck on Portuguese pages. Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads extracts; model-only turns stay on `low`.
-
-### Brave plans
-
-Any Brave key that can call Web Search works. You do not set the plan in the UI. `BRAVE_ENDPOINT=auto` (default) probes what the key allows:
-
-| Plan | What KuraChat uses |
-| --- | --- |
-| Search (paid, includes LLM Context) | `/llm/context` — extracted page chunks |
-| Legacy Free, or any plan without LLM Context | `/web/search` — titles, snippets, news |
-
-If a field is not in the plan, the client retries without optional flags, then tries the other endpoint. Set `BRAVE_ENDPOINT=web` or `llm` only to skip the probe.
+Web turns use `XAI_WEB_REASONING_EFFORT=medium` so Grok actually reads what it found; model-only turns stay on `low`.
 
 ---
 
@@ -187,9 +164,6 @@ If a field is not in the plan, the client retries without optional flags, then t
 ```bash
 bin/setup
 export XAI_API_KEY=...          # required to generate replies
-export KAGI_API_KEY=...         # optional; Web with Kagi (default)
-# export WEB_SEARCH_PROVIDER=brave
-# export BRAVE_API_KEY=...
 bin/dev
 ```
 
@@ -215,16 +189,7 @@ Do not commit `config/master.key`.
 | `XAI_MODEL` | Default `grok-4.3`. `grok-4.6` is stronger at tools |
 | `XAI_REASONING_EFFORT` | Default `low` (model-only turns) |
 | `XAI_WEB_REASONING_EFFORT` | Default `medium` (Web turns) |
-| `WEB_SEARCH_PROVIDER` | `kagi` (default) or `brave` |
-| `KAGI_API_KEY` | Required for Web when provider is Kagi |
-| `KAGI_EXTRACT_COUNT` | Default `3` (0–10). Kagi only |
-| `SEARCH_REGION` | Optional pin for both providers (`BR`, `PT`, `ALL`, …) |
-| `KAGI_REGION` | Overrides `SEARCH_REGION` for Kagi |
-| `BRAVE_API_KEY` | Required for Web when provider is Brave |
-| `BRAVE_ENDPOINT` | `auto` (default), or `llm` / `web` |
-| `BRAVE_CONTEXT_TOKENS` | Default `8192` (1024–32768). LLM Context only |
-| `BRAVE_COUNTRY` | Overrides `SEARCH_REGION` for Brave |
-| `BRAVE_SEARCH_LANG` | Unset by default — do not pin to `pt` unless you only want Portuguese pages |
+| `CHAT_REPLY_MAX_TOKENS` | Optional hard cap on reply length. Unset = no cap |
 | `SIGNUP_ENABLED` | Public signup. Turn off after the first account |
 | `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |
 | `KURA_HOST` | Public hostname. Share links use this |
