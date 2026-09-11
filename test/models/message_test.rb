@@ -6,9 +6,9 @@ class MessageTest < ActiveSupport::TestCase
     @chat = @user.conversations.create!
   end
 
-  test "as_openai drops placeholders and blank tool-less assistants" do
+  test "as_input keeps visible turns and drops placeholders and old tool rows" do
     pending = @chat.messages.create!(role: "assistant", status: "pending", content: "")
-    assert_nil pending.as_openai
+    assert_nil pending.as_input
 
     hidden = @chat.messages.create!(
       role: "assistant",
@@ -16,13 +16,16 @@ class MessageTest < ActiveSupport::TestCase
       content: nil,
       raw: { "tool_calls" => [ { "id" => "c1", "type" => "function", "function" => { "name" => "web_search", "arguments" => "{}" } } ] }
     )
-    payload = hidden.as_openai
-    assert_equal "assistant", payload[:role]
-    assert_nil payload[:content]
-    assert payload[:tool_calls]
+    assert_nil hidden.as_input
 
     tool = @chat.messages.create!(role: "tool", content: "{}", raw: { "tool_call_id" => "c1" })
-    assert_equal "c1", tool.as_openai[:tool_call_id]
+    assert_nil tool.as_input
+
+    user = @chat.messages.create!(role: "user", content: "Hi")
+    assert_equal({ role: "user", content: "Hi" }, user.as_input)
+
+    assistant = @chat.messages.create!(role: "assistant", status: "complete", content: "Hello")
+    assert_equal({ role: "assistant", content: "Hello" }, assistant.as_input)
   end
 
   test "user content is capped" do
@@ -33,17 +36,5 @@ class MessageTest < ActiveSupport::TestCase
   test "assistant content is not capped at 16384" do
     msg = @chat.messages.new(role: "assistant", status: "complete", content: "x" * 20_000)
     assert msg.valid?
-  end
-
-  test "compact_tool_json keeps titles and drops extracts" do
-    json = {
-      "query" => "rails",
-      "results" => [ { "title" => "Docs", "url" => "https://rubyonrails.org", "snippet" => "x" * 1800 } ]
-    }.to_json
-    compact = Message.compact_tool_json(json)
-    parsed = JSON.parse(compact)
-    assert_equal "rails", parsed["query"]
-    assert_equal "Docs", parsed["results"][0]["title"]
-    assert_nil parsed["results"][0]["snippet"]
   end
 end

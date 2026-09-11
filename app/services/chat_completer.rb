@@ -40,14 +40,9 @@ class ChatCompleter
     acc = Accumulator.new
     citations = []
     truncated = false
-    payload = windowed_messages
     begin
-      stream_released(payload) { |chunk|
-        if web?
-          apply_response_event!(chunk, acc, citations)
-        else
-          apply_chat_chunk!(chunk, acc)
-        end
+      stream_released { |event|
+        apply_response_event!(event, acc, citations)
         checkout { flush!(acc) } if acc.flush_due?
       }
     rescue RepetitionAbort => e
@@ -71,69 +66,20 @@ class ChatCompleter
     through = @conversation.summarized_through_id
     rows = @conversation.messages.chronological.where.not(id: @assistant.id)
     rows = rows.where("id > ?", through) if through.present?
-    rows = rows.to_a
-    compact_before = @user_message&.id
     picked = []
     prompt = assembled_system_prompt
     est = token_estimate(prompt)
-    group_history(rows).reverse_each do |group|
-      payloads = group.filter_map { |message| message.as_openai(compact_tools_before: compact_before) }
-      next if payloads.empty?
-      next unless legal_tool_group?(group, payloads)
+    rows.reverse_each do |message|
+      payload = message.as_input
+      next unless payload
 
-      cost = token_estimate(payloads.to_json)
-      break if picked.size + payloads.size > WINDOW_MESSAGES || est + cost > WINDOW_TOKENS
+      cost = token_estimate(payload.to_json)
+      break if picked.size + 1 > WINDOW_MESSAGES || est + cost > WINDOW_TOKENS
 
-      picked.unshift(*payloads)
+      picked.unshift(payload)
       est += cost
     end
     [ { role: "system", content: prompt }, *picked ]
-  end
-
-  def response_input(messages = windowed_messages)
-    messages.filter_map { |message|
-      role = message[:role] || message["role"]
-      next unless role.in?(%w[system user assistant])
-      next if message[:tool_calls].present? || message["tool_calls"].present?
-
-      content = message[:content] || message["content"]
-      next if content.blank? && role == "assistant"
-
-      { role: role, content: content.to_s }
-    }
-  end
-
-  def group_history(rows)
-    groups = []
-    i = 0
-    while i < rows.size
-      m = rows[i]
-      if m.tool_calls?
-        group = [ m ]
-        i += 1
-        while i < rows.size && rows[i].role == "tool"
-          group << rows[i]
-          i += 1
-        end
-        groups << group
-      else
-        groups << [ m ]
-        i += 1
-      end
-    end
-    groups
-  end
-
-  def legal_tool_group?(group, payloads)
-    head = group.first
-    return true unless head.tool_calls?
-
-    parent = payloads.find { |p| p[:tool_calls].present? }
-    return false unless parent
-
-    ids = parent[:tool_calls].map { |tc| tc["id"] || tc[:id] }.compact.sort
-    got = payloads.select { |p| p[:role] == "tool" }.map { |p| p[:tool_call_id] }.compact.sort
-    ids.present? && ids == got
   end
 
   def broadcast_failed
@@ -203,15 +149,15 @@ class ChatCompleter
       body << "Previous summary:\n#{prior}\n\n" if prior.present?
       body << "New messages:\n#{excerpt}"
 
-      response = xai.chat(
-        messages: [
+      response = xai.complete(
+        input: [
           { role: "system", content: "Summarize this conversation excerpt in at most 120 words. Keep facts, names, decisions, and open questions. Same language as the messages. No preamble." },
           { role: "user", content: body.truncate(12_000) }
         ],
-        max_tokens: 180,
+        max_output_tokens: 180,
         reasoning_effort: "none"
       )
-      text = response.dig("choices", 0, "message", "content").to_s.strip
+      text = Xai::Client.output_text(response).strip
       return if text.blank?
 
       @conversation.update!(summary: text, summarized_through_id: older.last.id)
@@ -237,7 +183,7 @@ class ChatCompleter
       ActiveRecord::Base.connection_pool.with_connection(&block)
     end
 
-    def stream_released(payload, &block)
+    def stream_released(&block)
       stop = false
       Thread.new do
         loop do
@@ -249,35 +195,15 @@ class ChatCompleter
         end
       end
       ActiveRecord::Base.connection_pool.release_connection
-      if web?
-        xai.stream_response(
-          input: response_input(payload),
-          tools: [ WEB_SEARCH_TOOL ],
-          max_output_tokens: reply_max_tokens,
-          reasoning_effort: reasoning_effort,
-          &block
-        )
-      else
-        xai.stream_chat(
-          messages: payload,
-          max_tokens: reply_max_tokens,
-          reasoning_effort: reasoning_effort,
-          &block
-        )
-      end
+      xai.stream_response(
+        input: windowed_messages,
+        tools: (web? ? [ WEB_SEARCH_TOOL ] : nil),
+        max_output_tokens: reply_max_tokens,
+        reasoning_effort: reasoning_effort,
+        &block
+      )
     ensure
       stop = true
-    end
-
-    def apply_chat_chunk!(chunk, acc)
-      delta = chunk.dig("choices", 0, "delta") || {}
-      return unless delta["content"]
-
-      acc.add_text(delta["content"])
-      if (reason = RepetitionGuard.check(acc.text))
-        acc.abort!(reason)
-        raise RepetitionAbort, reason
-      end
     end
 
     def apply_response_event!(event, acc, citations)
@@ -418,15 +344,15 @@ class ChatCompleter
     end
 
     def request_title(text)
-      response = xai.chat(
-        messages: [
+      response = xai.complete(
+        input: [
           { role: "system", content: "Reply with a conversation title only. Max 8 words, no quotes." },
           { role: "user", content: text.to_s.truncate(400) }
         ],
-        max_tokens: 24,
+        max_output_tokens: 24,
         reasoning_effort: "none"
       )
-      fallback_title(response.dig("choices", 0, "message", "content"))
+      fallback_title(Xai::Client.output_text(response))
     end
 
     def fallback_title(text)

@@ -38,32 +38,11 @@ class Message < ApplicationRecord
     raw.is_a?(Hash) && raw["tool_calls"].present?
   end
 
-  def as_openai(compact_tools_before: nil)
-    return nil if role == "assistant" && status.in?(%w[pending streaming failed])
-    return nil if role == "assistant" && content.blank? && !tool_calls?
+  def as_input
+    return nil unless role.in?(%w[user assistant])
+    return nil if role == "assistant" && (status != "complete" || content.blank?)
 
-    if tool_calls?
-      { role: "assistant", content: nil, tool_calls: raw["tool_calls"] }
-    elsif role == "tool"
-      id = raw.is_a?(Hash) ? raw["tool_call_id"] : nil
-      return nil if id.blank?
-
-      body = content.to_s
-      body = self.class.compact_tool_json(body) if compact_tools_before && self.id < compact_tools_before
-      { role: "tool", tool_call_id: id, content: body }
-    else
-      { role: role, content: content.to_s }
-    end
-  end
-
-  def self.compact_tool_json(json)
-    data = JSON.parse(json)
-    results = Array(data["results"]).map { |row| { "title" => row["title"], "url" => row["url"] } }
-    out = { "query" => data["query"], "results" => results }
-    out["error"] = data["error"] if data["error"]
-    JSON.generate(out)
-  rescue JSON::ParserError
-    json.to_s.truncate(400)
+    { role: role, content: content.to_s }
   end
 
   private

@@ -15,39 +15,39 @@ module Xai
       raise Error, "missing_key" if @api_key.blank?
     end
 
-    def stream_chat(messages:, tools: nil, tool_choice: nil, max_tokens: nil,
-                    reasoning_effort: ENV.fetch("XAI_REASONING_EFFORT", "low"), &block)
-      body = { model: @model, messages: messages, stream: true, reasoning_effort: reasoning_effort }
-      body[:max_tokens] = max_tokens if max_tokens
-      if tools.present?
-        body[:tools] = tools
-        body[:parallel_tool_calls] = false
-        body[:tool_choice] = tool_choice.presence || "auto"
-      end
-      post_sse("/chat/completions", body, &block)
-    end
-
     def stream_response(input:, tools: nil, max_output_tokens: nil,
-                        reasoning_effort: ENV.fetch("XAI_WEB_REASONING_EFFORT", "medium"), &block)
-      body = {
-        model: @model,
-        input: input,
-        stream: true,
-        store: false,
-        reasoning_effort: reasoning_effort
-      }
-      body[:tools] = tools if tools.present?
-      body[:max_output_tokens] = max_output_tokens if max_output_tokens
-      post_sse("/responses", body, &block)
+                        reasoning_effort: ENV.fetch("XAI_REASONING_EFFORT", "low"), &block)
+      post_sse("/responses", response_body(input:, tools:, max_output_tokens:, reasoning_effort:, stream: true), &block)
     end
 
-    def chat(messages:, max_tokens: 24, reasoning_effort: "none")
-      post_json("/chat/completions", {
-        model: @model, messages: messages, stream: false, max_tokens: max_tokens, reasoning_effort: reasoning_effort
-      })
+    def complete(input:, max_output_tokens: nil, reasoning_effort: "none")
+      post_json("/responses", response_body(input:, max_output_tokens:, reasoning_effort:, stream: false))
+    end
+
+    def self.output_text(response)
+      Array(response.is_a?(Hash) ? response["output"] : nil).flat_map { |item|
+        next [] unless item.is_a?(Hash)
+
+        Array(item["content"]).filter_map { |part|
+          part["text"] if part.is_a?(Hash) && part["text"].present?
+        }
+      }.join
     end
 
     private
+      def response_body(input:, tools: nil, max_output_tokens: nil, reasoning_effort:, stream:)
+        body = {
+          model: @model,
+          input: input,
+          stream: stream,
+          store: false,
+          reasoning_effort: reasoning_effort
+        }
+        body[:tools] = tools if tools.present?
+        body[:max_output_tokens] = max_output_tokens if max_output_tokens
+        body
+      end
+
       def http
         Net::HTTP.new(BASE.host, BASE.port).tap do |h|
           h.use_ssl = true
