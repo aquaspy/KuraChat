@@ -25,6 +25,7 @@ class XaiClientTest < ActiveSupport::TestCase
     assert_equal "/responses", @client.path
     assert_equal false, @client.payload[:store]
     assert @client.payload[:stream]
+    assert_equal [ "no_inline_citations" ], @client.payload[:include]
     refute @client.payload.key?(:tools)
     refute @client.payload.key?(:max_output_tokens)
     assert_equal "low", @client.payload[:reasoning_effort]
@@ -45,6 +46,7 @@ class XaiClientTest < ActiveSupport::TestCase
     assert_equal "/responses", @client.path
     assert_equal false, @client.payload[:stream]
     assert_equal false, @client.payload[:store]
+    refute @client.payload.key?(:include)
     assert_equal 24, @client.payload[:max_output_tokens]
   end
 

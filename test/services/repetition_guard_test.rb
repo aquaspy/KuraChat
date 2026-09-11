@@ -33,6 +33,14 @@ class RepetitionGuardTest < ActiveSupport::TestCase
     assert_equal "Hi  there", ChatCompleter::RepetitionGuard.strip_junk(raw)
   end
 
+  test "strip_junk removes inline [[n]](url) cites and unsticks the next sentence" do
+    raw = "Sim, a Clever é da Billa.[[1]](https://www.billa.cz/znacky)A Billa vende a linha.[[2]](https://example.com/x)"
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "Sim, a Clever é da Billa. A Billa vende a linha.", cleaned
+    refute_includes cleaned, "[[1]]"
+    refute_includes cleaned, "billa.cz"
+  end
+
   test "clean prose is not flagged" do
     text = "Uma resposta normal com um link [fonte](https://ok.example) e fim."
     assert_nil ChatCompleter::RepetitionGuard.check(text)

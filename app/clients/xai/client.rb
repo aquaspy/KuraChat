@@ -45,6 +45,7 @@ module Xai
         }
         body[:tools] = tools if tools.present?
         body[:max_output_tokens] = max_output_tokens if max_output_tokens
+        body[:include] = [ "no_inline_citations" ] if stream
         body
       end
 
