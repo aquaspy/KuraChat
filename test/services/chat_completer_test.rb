@@ -134,9 +134,9 @@ class ChatCompleterTest < ActiveSupport::TestCase
     assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
     payload = ChatCompleter.new(assistant, xai: FakeXai.new).windowed_messages
     system = payload.first[:content]
-    assert_match(/live web search this turn/i, system)
-    refute_match(/Call web_search before answering/i, system)
-    refute_match(/no live web access/i, system)
+    assert_match(/live web search is available this turn/i, system)
+    refute_match(/no live web this turn/i, system)
+    assert_match(/never invent urls/i, system)
     assert_match(/Current date: \d{4}-\d{2}-\d{2}/, system)
     assert_includes system, "America/Sao_Paulo"
     assert_equal({ type: "web_search" }, ChatCompleter::WEB_SEARCH_TOOL)

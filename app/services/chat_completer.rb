@@ -99,7 +99,7 @@ class ChatCompleter
     end
 
     def system_prompt
-      prompt = I18n.t("chat.system_prompt", locale: @locale, ui_locale: @locale)
+      prompt = I18n.t("chat.system_prompt", locale: @locale)
       key = web? ? "chat.system_web" : "chat.system_no_web"
       prompt += "\n#{I18n.t(key, locale: @locale)}"
       prompt
