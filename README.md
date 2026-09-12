@@ -181,6 +181,15 @@ Do not commit `config/master.key`.
 
 ---
 
+## Branches
+
+- **`master`** — development. Land and iterate here first.
+- **`stable`** — tested code only. Promote from `master` once a change has been run and verified.
+
+They sit on the same commit until the next change is under test.
+
+---
+
 ## Environment
 
 | Variable | What it does |
