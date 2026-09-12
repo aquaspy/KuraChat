@@ -55,6 +55,7 @@ en:
     send: "Send"
     web: "Web"
     web_hint: "Search the web for this message"
+    sources: "Sources"
     thinking: "Thinking…"
     searching: "Searching the web…"
     offline: "You're offline. You can read, but not send."

@@ -603,6 +603,18 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 .msg-body { font-size: 1rem; line-height: 1.55; }
 .msg-body p { margin: 0 0 0.6rem; }
 .msg-body p:last-child { margin-bottom: 0; }
+.msg-body.md :is(h1, h2, h3, h4, h5, h6) {
+  font-weight: 650;
+  line-height: 1.3;
+  margin: 0.85rem 0 0.35rem;
+}
+.msg-body.md :is(h1, h2, h3, h4, h5, h6):first-child { margin-top: 0; }
+.msg-body.md h1 { font-size: 1.28rem; }
+.msg-body.md h2 { font-size: 1.14rem; }
+.msg-body.md h3 { font-size: 1.05rem; }
+.msg-body.md h4,
+.msg-body.md h5,
+.msg-body.md h6 { font-size: 1rem; }
 .msg-body.md pre {
   overflow: auto;
   padding: 0.7rem 0.8rem;
@@ -613,14 +625,41 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 .msg-body.md a { color: var(--accent-2); }
 .msg-meta, .msg-status { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.78rem; }
 .msg-error { margin: 0 0 0.5rem; color: #c45c4a; }
+.cite-fold {
+  margin: 0.45rem 0 0;
+  padding: 0.35rem 0 0;
+  border-top: 1px solid var(--line);
+}
+.cite-fold > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  user-select: none;
+  width: fit-content;
+}
+.cite-fold > summary::-webkit-details-marker { display: none; }
+.cite-fold-mark {
+  display: block;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-right: 1.4px solid currentColor;
+  border-bottom: 1.4px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.12s ease;
+}
+.cite-fold[open] > summary .cite-fold-mark { transform: rotate(45deg); }
+.cite-fold-n { opacity: 0.75; }
 .citations {
   list-style: none;
-  padding: 0.55rem 0 0;
-  margin: 0.5rem 0 0;
+  padding: 0.45rem 0 0;
+  margin: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  border-top: 1px solid var(--line);
 }
 .citations a {
   display: inline-block;

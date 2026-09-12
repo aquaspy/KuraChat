@@ -7,6 +7,23 @@ class MarkdownRendererTest < ActiveSupport::TestCase
     assert_not_includes html, "script"
   end
 
+  test "atx headings work with and without a space after the hashes" do
+    spaced = MarkdownRenderer.render("### 2. Hello")
+    tight = MarkdownRenderer.render("###2. Hello")
+    assert_includes spaced, "<h3>"
+    assert_includes spaced, "2. Hello"
+    assert_includes tight, "<h3>"
+    assert_includes tight, "2. Hello"
+    assert_not_includes tight, "###2"
+    assert_not_includes spaced, "<a>"
+  end
+
+  test "a full-sentence bold line becomes strong, not literal asterisks" do
+    html = MarkdownRenderer.render("**Sim, dá pra pedir, mas com jeitinho e respeito.**")
+    assert_includes html, "<strong>"
+    assert_not_includes html, "**Sim"
+  end
+
   test "strips xAI inline [[n]] citations before render" do
     html = MarkdownRenderer.render("Clever é da Billa.[[1]](https://www.billa.cz/znacky)A Billa vende a linha.")
     assert_includes html, "Clever é da Billa."

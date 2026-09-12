@@ -1,1 +1,1 @@
-<div class="msg-body" id="<%= dom_id(message, :body) %>"><%= simple_format(ERB::Util.h(message.content.to_s.presence || "…")) %></div>
+<div class="msg-body md" id="<%= dom_id(message, :body) %>"><%= MarkdownRenderer.render(message.content.to_s.presence || "…") %></div>

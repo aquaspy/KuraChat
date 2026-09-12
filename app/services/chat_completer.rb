@@ -295,7 +295,7 @@ class ChatCompleter
 
       @assistant.update_columns(content: acc.text, updated_at: Time.current)
       acc.mark_flushed!
-      broadcast_body_plain
+      broadcast_body
     end
 
     def html_complete!(citations, truncated: false)
@@ -307,6 +307,7 @@ class ChatCompleter
       }
       attrs[:error] = "truncated_repetition" if truncated
       @assistant.update!(attrs)
+      broadcast_body
       broadcast_message
     end
 
@@ -378,7 +379,7 @@ class ChatCompleter
       )
     end
 
-    def broadcast_body_plain
+    def broadcast_body
       Turbo::StreamsChannel.broadcast_replace_to(
         [ @conversation.user, @conversation ],
         target: ActionView::RecordIdentifier.dom_id(@assistant, :body),

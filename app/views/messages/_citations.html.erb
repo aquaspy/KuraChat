@@ -1,8 +1,15 @@
 <% urls = Array(message.citations).filter_map { |c| hash = c.respond_to?(:to_unsafe_h) ? c.to_unsafe_h : c; [hash["title"] || hash[:title], safe_citation_url(hash["url"] || hash[:url])] }.select { |_, uri| uri } %>
 <% if urls.any? %>
-  <ul class="citations">
-    <% urls.each do |title, uri| %>
-      <li><%= link_to (title.presence || uri.host), uri.to_s, rel: "noopener noreferrer nofollow", target: "_blank" %></li>
-    <% end %>
-  </ul>
+  <details class="cite-fold">
+    <summary>
+      <span class="cite-fold-mark" aria-hidden="true"></span>
+      <%= t("chat.sources") %>
+      <span class="cite-fold-n"><%= urls.size %></span>
+    </summary>
+    <ul class="citations">
+      <% urls.each do |title, uri| %>
+        <li><%= link_to (title.presence || uri.host), uri.to_s, rel: "noopener noreferrer nofollow", target: "_blank" %></li>
+      <% end %>
+    </ul>
+  </details>
 <% end %>

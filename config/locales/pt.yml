@@ -55,6 +55,7 @@ pt:
     send: "Enviar"
     web: "Web"
     web_hint: "Buscar na web nesta mensagem"
+    sources: "Fontes"
     thinking: "Pensando…"
     searching: "Buscando na web…"
     offline: "Você está offline. Pode ler, mas não enviar."

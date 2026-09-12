@@ -11,7 +11,7 @@
       <%= button_to t("chat.retry"), retry_conversation_message_path(message.conversation, message), class: "btn-dialog primary" %>
     <% end %>
   <% else %>
-    <div class="msg-body md"><%= MarkdownRenderer.render(message.content) %></div>
+    <%= render "messages/body", message: message %>
     <%= render "messages/citations", message: message %>
   <% end %>
 </article>
