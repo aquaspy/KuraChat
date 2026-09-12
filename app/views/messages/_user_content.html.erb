@@ -1,0 +1,10 @@
+<% if message.image.attached? %>
+  <div class="msg-image">
+    <%= link_to rails_blob_path(message.image, disposition: "inline"), target: "_blank", rel: "noopener" do %>
+      <%= message_image_tag(message) %>
+    <% end %>
+  </div>
+<% end %>
+<% if message.content.present? %>
+  <div class="msg-body"><%= simple_format(ERB::Util.h(message.content)) %></div>
+<% end %>

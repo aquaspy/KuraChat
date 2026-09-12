@@ -30,9 +30,7 @@ class ConversationsController < ApplicationController
   end
 
   def destroy_all
-    ids = current_user.conversation_ids
-    Message.where(conversation_id: ids).delete_all
-    current_user.conversations.delete_all
+    current_user.conversations.destroy_all
     Conversation.reclaim_space
     redirect_to conversations_path, notice: t("chat.deleted_all")
   end

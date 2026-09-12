@@ -1,6 +1,6 @@
 class Conversation < ApplicationRecord
   belongs_to :user
-  has_many :messages, dependent: :delete_all
+  has_many :messages, dependent: :destroy
 
   scope :blank_drafts, -> { where(title: "").where(share_token: nil).where.missing(:messages) }
 

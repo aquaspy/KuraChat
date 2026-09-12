@@ -14,9 +14,8 @@ class ChatCompleter
   HEARTBEAT_EVERY = 60
   FLUSH_EVERY = 0.25
   FLUSH_CHARS = 80
-  WINDOW_MESSAGES = Integer(ENV.fetch("CHAT_WINDOW_MESSAGES", "40"))
-  WINDOW_TOKENS   = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "32000"))
-  KEEP_RECENT     = Integer(ENV.fetch("CHAT_KEEP_RECENT", "16"))
+  WINDOW_TOKENS = Integer(ENV.fetch("CHAT_WINDOW_TOKENS", "150000"))
+  KEEP_RECENT_TOKENS = Integer(ENV.fetch("CHAT_KEEP_RECENT_TOKENS", "32000"))
   WEB_SEARCH_TOOL = { type: "web_search" }.freeze
 
   def self.broadcast_failed(message)
@@ -39,6 +38,8 @@ class ChatCompleter
 
     acc = Accumulator.new
     citations = []
+    @token_usage = {}
+    @reasoning_items = []
     truncated = false
     begin
       stream_released { |event|
@@ -50,7 +51,10 @@ class ChatCompleter
       truncated = true
     end
     checkout { flush!(acc) }
-    Rails.logger.info("[ChatCompleter] message_id=#{@assistant.id} chars=#{acc.text.length} web=#{web?}")
+    Rails.logger.info(
+      "[ChatCompleter] message_id=#{@assistant.id} chars=#{acc.text.length} web=#{web?} " \
+      "input=#{@token_usage["input_tokens"]} cached=#{@token_usage["cached_tokens"]}"
+    )
     checkout { html_complete!(citations, truncated: truncated || acc.aborted?); auto_title!; maybe_compact! }
   rescue ChatCompleter::Gone
     nil
@@ -66,20 +70,20 @@ class ChatCompleter
     through = @conversation.summarized_through_id
     rows = @conversation.messages.chronological.where.not(id: @assistant.id)
     rows = rows.where("id > ?", through) if through.present?
+    prefix = prefix_messages
     picked = []
-    prompt = assembled_system_prompt
-    est = token_estimate(prompt)
+    est = token_estimate(prefix.to_json)
     rows.reverse_each do |message|
-      payload = message.as_input
-      next unless payload
+      items = Array(message.as_input)
+      next if items.empty?
 
-      cost = token_estimate(payload.to_json)
-      break if picked.size + 1 > WINDOW_MESSAGES || est + cost > WINDOW_TOKENS
+      cost = message.input_cost
+      break if est + cost > WINDOW_TOKENS
 
-      picked.unshift(payload)
+      picked.unshift(*items)
       est += cost
     end
-    [ { role: "system", content: prompt }, *picked ]
+    prefix + picked
   end
 
   def broadcast_failed
@@ -98,20 +102,27 @@ class ChatCompleter
       @user_message&.web?
     end
 
-    def system_prompt
-      prompt = I18n.t("chat.system_prompt", locale: @locale)
-      key = web? ? "chat.system_web" : "chat.system_no_web"
-      prompt += "\n#{I18n.t(key, locale: @locale)}"
-      prompt
+    def prefix_messages
+      items = [ persona_message, turn_context_message ]
+      items << summary_message if summary_message
+      items
     end
 
-    def assembled_system_prompt
+    def persona_message
+      { role: "system", content: I18n.t("chat.system_prompt", locale: @locale) }
+    end
+
+    def turn_context_message
       now = Time.zone.now
-      prompt = "#{system_prompt}\nCurrent date: #{now.strftime("%Y-%m-%d %A")} (#{Time.zone.tzinfo.identifier})."
-      if @conversation.summary.present?
-        prompt = "#{prompt}\n\nEarlier conversation summary:\n#{@conversation.summary}"
-      end
-      prompt
+      date = "Current date: #{now.strftime("%Y-%m-%d %A")} (#{Time.zone.tzinfo.identifier})."
+      web_line = I18n.t(web? ? "chat.system_web" : "chat.system_no_web", locale: @locale)
+      { role: "system", content: "#{date}\n#{web_line}" }
+    end
+
+    def summary_message
+      return nil if @conversation.summary.blank?
+
+      { role: "system", content: "Earlier conversation summary:\n#{@conversation.summary}" }
     end
 
     def reasoning_effort
@@ -129,18 +140,40 @@ class ChatCompleter
       Integer(raw)
     end
 
-    def maybe_compact!
-      visible = @conversation.messages.transcript.chronological.where("id < ?", @assistant.id).to_a
-      return if visible.size <= KEEP_RECENT
-
-      cutoff = visible.last(KEEP_RECENT).first.id
-      older = visible.select { |message| message.id < cutoff }
+    def compactable_messages
+      rows = @conversation.messages.transcript.chronological.where("id <= ?", @assistant.id).to_a
       through = @conversation.summarized_through_id
-      older = older.select { |message| through.nil? || message.id > through }
-      excerpt = older.filter_map { |message|
-        next if message.content.blank?
+      rows.select { |message| through.nil? || message.id > through }
+    end
 
-        "#{message.role}: #{message.content.to_s.truncate(500)}"
+    def maybe_compact!
+      rows = compactable_messages
+      return if rows.empty?
+
+      costs = rows.filter_map { |message|
+        cost = message.input_cost
+        next if cost.zero?
+
+        [ message, cost ]
+      }
+      total = token_estimate(prefix_messages.to_json) + costs.sum { |_, cost| cost }
+      return if total <= WINDOW_TOKENS
+
+      kept_tokens = 0
+      cut_index = costs.length
+      costs.each_with_index.reverse_each do |(_, cost), i|
+        break if kept_tokens.positive? && kept_tokens + cost > KEEP_RECENT_TOKENS
+
+        kept_tokens += cost
+        cut_index = i
+      end
+      older = costs[0...cut_index].map(&:first)
+      excerpt = older.filter_map { |message|
+        label = message.content.to_s
+        label = "[image]" if label.blank? && message.image.attached?
+        next if label.blank?
+
+        "#{message.role}: #{label.truncate(500)}"
       }.join("\n")
       return if excerpt.blank?
 
@@ -200,6 +233,7 @@ class ChatCompleter
         tools: (web? ? [ WEB_SEARCH_TOOL ] : nil),
         max_output_tokens: reply_max_tokens,
         reasoning_effort: reasoning_effort,
+        prompt_cache_key: "kura-#{@conversation.id}",
         &block
       )
     ensure
@@ -227,7 +261,10 @@ class ChatCompleter
 
       return unless type == "response.completed" || event["response"].is_a?(Hash) && type.end_with?("completed")
 
-      citations.replace(self.class.citations_from(event["response"] || event))
+      response = event["response"] || event
+      citations.replace(self.class.citations_from(response))
+      @token_usage = self.class.token_usage_from(response)
+      @reasoning_items = self.class.reasoning_from(response)
     end
 
     def response_text_delta(event)
@@ -237,6 +274,28 @@ class ChatCompleter
       return delta["text"] if delta.is_a?(Hash) && delta["text"].present?
 
       nil
+    end
+
+    def self.token_usage_from(response)
+      return {} unless response.is_a?(Hash)
+
+      usage = response["usage"]
+      return {} unless usage.is_a?(Hash)
+
+      input_details = usage["input_tokens_details"] || usage["prompt_tokens_details"] || {}
+      output_details = usage["output_tokens_details"] || usage["completion_tokens_details"] || {}
+      {
+        "input_tokens" => usage["input_tokens"] || usage["prompt_tokens"],
+        "cached_tokens" => input_details.is_a?(Hash) ? input_details["cached_tokens"] : nil,
+        "output_tokens" => usage["output_tokens"] || usage["completion_tokens"],
+        "reasoning_tokens" => output_details.is_a?(Hash) ? output_details["reasoning_tokens"] : nil
+      }.compact
+    end
+
+    def self.reasoning_from(response)
+      return [] unless response.is_a?(Hash)
+
+      Array(response["output"]).select { |item| item.is_a?(Hash) && item["type"] == "reasoning" }
     end
 
     def self.citations_from(response)
@@ -306,6 +365,11 @@ class ChatCompleter
         citations: citations.uniq { |c| c["url"] || c[:url] }
       }
       attrs[:error] = "truncated_repetition" if truncated
+      attrs[:token_usage] = @token_usage if @token_usage.present?
+      if @reasoning_items.present?
+        base = @assistant.raw.is_a?(Hash) ? @assistant.raw : {}
+        attrs[:raw] = base.merge("reasoning" => @reasoning_items)
+      end
       @assistant.update!(attrs)
       broadcast_body
       broadcast_message

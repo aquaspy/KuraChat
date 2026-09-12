@@ -19,6 +19,8 @@ module Kurachat
     config.i18n.available_locales = [ :en, :pt ]
     config.i18n.default_locale = :en
     config.time_zone = "America/Sao_Paulo"
+    # Signed blob URLs on cached/shared pages should outlive a short tab.
+    config.active_storage.service_urls_expire_in = 1.week
 
     # Configuration for the application, engines, and railties goes here.
     #

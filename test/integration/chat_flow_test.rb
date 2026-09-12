@@ -102,16 +102,31 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     assert_equal 1, chat.messages.where(role: "user").count
   end
 
-  test "delete all removes only the current users chats" do
+  test "posting an image-only message enqueues completion" do
+    chat = @user.conversations.create!
+    file = fixture_file_upload("dot.png", "image/png")
+    assert_enqueued_with(job: CompleteChatJob) do
+      post conversation_messages_path(chat), params: { content: "", image: file }
+    end
+    user = chat.messages.find_by!(role: "user")
+    assert user.image.attached?
+    assert_equal "pending", chat.messages.where(role: "assistant").last.status
+  end
+
+  test "delete all purges images and only the current users chats" do
     keep = @other.conversations.create!(title: "Theirs")
     mine = @user.conversations.create!(title: "Mine")
-    mine.messages.create!(role: "user", content: "secret")
+    pic = mine.messages.create!(role: "user", content: "secret")
+    pic.image.attach(io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"), filename: "dot.png", content_type: "image/png")
+    path = pic.image.blob.service.path_for(pic.image.blob.key)
+    assert File.exist?(path)
 
     delete destroy_all_conversations_path
     assert_redirected_to conversations_path
     assert_not Conversation.exists?(mine.id)
     assert_not Message.exists?(conversation_id: mine.id)
     assert Conversation.exists?(keep.id)
+    assert_not File.exist?(path)
   end
 
   test "search filters titles" do

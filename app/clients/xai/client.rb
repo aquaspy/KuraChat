@@ -16,8 +16,14 @@ module Xai
     end
 
     def stream_response(input:, tools: nil, max_output_tokens: nil,
-                        reasoning_effort: ENV.fetch("XAI_REASONING_EFFORT", "low"), &block)
-      post_sse("/responses", response_body(input:, tools:, max_output_tokens:, reasoning_effort:, stream: true), &block)
+                        reasoning_effort: ENV.fetch("XAI_REASONING_EFFORT", "low"),
+                        prompt_cache_key: nil, &block)
+      post_sse(
+        "/responses",
+        response_body(input:, tools:, max_output_tokens:, reasoning_effort:, stream: true, prompt_cache_key:),
+        prompt_cache_key:,
+        &block
+      )
     end
 
     def complete(input:, max_output_tokens: nil, reasoning_effort: "none")
@@ -35,7 +41,7 @@ module Xai
     end
 
     private
-      def response_body(input:, tools: nil, max_output_tokens: nil, reasoning_effort:, stream:)
+      def response_body(input:, tools: nil, max_output_tokens: nil, reasoning_effort:, stream:, prompt_cache_key: nil)
         body = {
           model: @model,
           input: input,
@@ -45,7 +51,10 @@ module Xai
         }
         body[:tools] = tools if tools.present?
         body[:max_output_tokens] = max_output_tokens if max_output_tokens
-        body[:include] = [ "no_inline_citations" ] if stream
+        body[:prompt_cache_key] = prompt_cache_key if prompt_cache_key.present?
+        if stream
+          body[:include] = [ "no_inline_citations", "reasoning.encrypted_content" ]
+        end
         body
       end
 
@@ -57,12 +66,14 @@ module Xai
         end
       end
 
-      def headers
-        {
+      def headers(prompt_cache_key: nil)
+        h = {
           "Authorization" => "Bearer #{@api_key}",
           "Content-Type" => "application/json",
           "Accept" => "application/json"
         }
+        h["x-grok-conv-id"] = prompt_cache_key if prompt_cache_key.present?
+        h
       end
 
       def post_json(path, body)
@@ -77,12 +88,12 @@ module Xai
         raise TimeoutError, "timeout"
       end
 
-      def post_sse(path, body)
+      def post_sse(path, body, prompt_cache_key: nil)
         conn = nil
         conn = http
         conn.start
         req = Net::HTTP::Post.new(URI.join(BASE.to_s + "/", path.delete_prefix("/")))
-        headers.each { |k, v| req[k] = v }
+        headers(prompt_cache_key:).each { |k, v| req[k] = v }
         req.body = JSON.generate(body)
         conn.request(req) do |res|
           raise Error, "http_#{res.code}" unless res.is_a?(Net::HTTPSuccess)

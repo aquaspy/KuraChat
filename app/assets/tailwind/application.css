@@ -594,6 +594,18 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 }
 .msg-user.is-echo { opacity: 0.88; }
 .msg-user.is-echo .msg-body { white-space: pre-wrap; }
+.msg-image { margin: 0 0 0.45rem; }
+.msg-image:last-child { margin-bottom: 0; }
+.msg-image a { display: block; }
+.msg-image img {
+  display: block;
+  max-width: min(18rem, 100%);
+  max-height: 16rem;
+  width: auto;
+  height: auto;
+  border-radius: 0.45rem;
+  object-fit: contain;
+}
 .msg-assistant {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -682,10 +694,47 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   flex-shrink: 0;
   margin-top: auto;
 }
+.composer-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.composer-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-start;
+  padding: 0.2rem 0.25rem 0.2rem 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: var(--input);
+}
+.composer-chip[hidden] { display: none; }
+.composer-chip img {
+  width: 2.2rem;
+  height: 2.2rem;
+  object-fit: cover;
+  border-radius: 0.35rem;
+}
+.composer-chip-x {
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.composer-chip-x:hover { color: var(--ink); }
 .composer textarea {
   flex: 1;
   min-height: 2.6rem;
   max-height: 11rem;
+  width: 100%;
   resize: none;
   border: 1px solid var(--line);
   background: var(--input);
@@ -695,6 +744,20 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   font: inherit;
 }
 .composer .btn-primary { padding: 0.55rem 0.85rem; }
+.attach-btn {
+  width: 2.6rem;
+  height: 2.6rem;
+  flex: none;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--input);
+  cursor: pointer;
+}
+.attach-btn:hover { color: var(--ink); }
+.attach-btn:has(input:focus-visible) {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
 .web-switch {
   display: inline-flex;
   align-items: center;
@@ -947,6 +1010,7 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   .composer { padding-bottom: max(0.9rem, env(safe-area-inset-bottom)); }
   .web-switch { padding: 0 0.4rem 0 0.5rem; height: 2.75rem; }
   .web-switch-label { font-size: 0.8rem; }
+  .attach-btn { width: 2.75rem; height: 2.75rem; }
 
   .flash { top: 3.6rem; }
 

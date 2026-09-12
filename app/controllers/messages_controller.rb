@@ -13,11 +13,13 @@ class MessagesController < ApplicationController
         redirect_to @conversation, alert: t("chat.in_flight")
         return
       end
-      @user_message = @conversation.messages.create!(
+      @user_message = @conversation.messages.new(
         role: "user",
         content: params[:content].to_s,
         web: ActiveModel::Type::Boolean.new.cast(params[:web]) || false
       )
+      @user_message.image.attach(params[:image]) if params[:image].present?
+      @user_message.save!
       @assistant = @conversation.messages.create!(role: "assistant", status: "pending", content: "")
     end
     CompleteChatJob.perform_later(@assistant.id, I18n.locale.to_s)
@@ -30,7 +32,8 @@ class MessagesController < ApplicationController
   rescue ActiveRecord::RecordNotUnique
     redirect_to @conversation, alert: t("chat.in_flight")
   rescue ActiveRecord::RecordInvalid
-    redirect_to @conversation, alert: t("chat.blank")
+    alert = @user_message&.errors&.[](:image).present? ? t("chat.bad_image") : t("chat.blank")
+    redirect_to @conversation, alert: alert
   end
 
   def retry

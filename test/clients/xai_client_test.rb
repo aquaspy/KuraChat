@@ -2,16 +2,18 @@ require "test_helper"
 
 class XaiClientTest < ActiveSupport::TestCase
   class CaptureClient < Xai::Client
-    attr_reader :path, :payload
+    attr_reader :path, :payload, :sent_headers
 
-    def post_sse(path, body)
+    def post_sse(path, body, prompt_cache_key: nil)
       @path = path
       @payload = body
+      @sent_headers = headers(prompt_cache_key:)
     end
 
     def post_json(path, body)
       @path = path
       @payload = body
+      @sent_headers = headers
       { "output" => [] }
     end
   end
@@ -25,10 +27,23 @@ class XaiClientTest < ActiveSupport::TestCase
     assert_equal "/responses", @client.path
     assert_equal false, @client.payload[:store]
     assert @client.payload[:stream]
-    assert_equal [ "no_inline_citations" ], @client.payload[:include]
+    assert_equal [ "no_inline_citations", "reasoning.encrypted_content" ], @client.payload[:include]
     refute @client.payload.key?(:tools)
     refute @client.payload.key?(:max_output_tokens)
+    refute @client.payload.key?(:prompt_cache_key)
+    refute @client.sent_headers.key?("x-grok-conv-id")
     assert_equal "low", @client.payload[:reasoning_effort]
+  end
+
+  test "stream_response sends prompt_cache_key in body and conv-id header" do
+    @client.stream_response(
+      input: [ { role: "user", content: "Hi" } ],
+      reasoning_effort: "low",
+      prompt_cache_key: "kura-9"
+    )
+    assert_equal "kura-9", @client.payload[:prompt_cache_key]
+    assert_equal "kura-9", @client.sent_headers["x-grok-conv-id"]
+    assert_equal false, @client.payload[:store]
   end
 
   test "stream_response includes web_search when asked" do
@@ -47,6 +62,8 @@ class XaiClientTest < ActiveSupport::TestCase
     assert_equal false, @client.payload[:stream]
     assert_equal false, @client.payload[:store]
     refute @client.payload.key?(:include)
+    refute @client.payload.key?(:prompt_cache_key)
+    refute @client.sent_headers.key?("x-grok-conv-id")
     assert_equal 24, @client.payload[:max_output_tokens]
   end
 
