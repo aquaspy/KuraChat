@@ -162,4 +162,11 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, "autofocus"
     assert_includes @response.body, %(id="title_field_conversation_#{chat.id}")
   end
+
+  test "composer re-syncs the send button as the user types" do
+    chat = @user.conversations.create!
+    get conversation_path(chat)
+    assert_response :success
+    assert_includes @response.body, %(input-&gt;composer#resize input-&gt;composer#sync)
+  end
 end

@@ -44,7 +44,7 @@
         <img alt="" data-composer-target="thumb">
         <button type="button" class="composer-chip-x" data-action="composer#clearImage" aria-label="<%= t("app.cancel") %>">×</button>
       </div>
-      <%= text_area_tag :content, nil, rows: 1, maxlength: 16384, placeholder: t("chat.placeholder"), autofocus: (@messages || []).empty?, enterkeyhint: "send", data: { composer_target: "input", action: "input->composer#resize" } %>
+      <%= text_area_tag :content, nil, rows: 1, maxlength: 16384, placeholder: t("chat.placeholder"), autofocus: (@messages || []).empty?, enterkeyhint: "send", data: { composer_target: "input", action: "input->composer#resize input->composer#sync" } %>
     </div>
     <label class="icon-btn attach-btn" title="<%= t("chat.attach") %>">
       <input type="file" name="image" accept="image/*" class="sr-only" data-composer-target="file" data-action="change->composer#picked">
