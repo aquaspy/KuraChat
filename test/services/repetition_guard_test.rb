@@ -30,7 +30,7 @@ class RepetitionGuardTest < ActiveSupport::TestCase
 
   test "strip_junk removes PUA citation blocks" do
     raw = "Hi #{PUA}markdown:2#{PUA}#{PUA}l#{PUA}https://x.test#{PUA}#{PUA}r#{PUA}X#{PUA} there"
-    assert_equal "Hi  there", ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "Hi there", ChatCompleter::RepetitionGuard.strip_junk(raw)
   end
 
   test "strip_junk removes inline [[n]](url) cites and unsticks the next sentence" do
@@ -39,6 +39,18 @@ class RepetitionGuardTest < ActiveSupport::TestCase
     assert_equal "Sim, a Clever é da Billa. A Billa vende a linha.", cleaned
     refute_includes cleaned, "[[1]]"
     refute_includes cleaned, "billa.cz"
+  end
+
+  test "strip_junk leaves a space when a cite sat between a word and a number" do
+    raw = "Grok vence com[[1]](https://x.ai)2M tokens (vs.[[2]](https://x.ai)1M do[[3]](https://x.ai)4.3)."
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "Grok vence com 2M tokens (vs. 1M do 4.3).", cleaned
+  end
+
+  test "strip_junk leaves a space when a PUA cite sat between a word and a number" do
+    raw = "vence com#{PUA}markdown:1#{PUA}2M tokens (vs.#{PUA}1M do#{PUA}4.3)"
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "vence com 2M tokens (vs. 1M do 4.3)", cleaned
   end
 
   test "clean prose is not flagged" do

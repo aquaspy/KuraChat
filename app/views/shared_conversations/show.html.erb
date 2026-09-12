@@ -15,7 +15,7 @@
           <%= render "messages/user_content", message: message %>
         <% else %>
           <div class="msg-body md"><%= MarkdownRenderer.render(message.content) %></div>
-          <%= render "messages/citations", message: message %>
+          <%= render "messages/tools", message: message %>
         <% end %>
       </section>
     <% end %>

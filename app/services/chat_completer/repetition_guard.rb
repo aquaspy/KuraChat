@@ -38,10 +38,11 @@ class ChatCompleter
     def self.strip_junk(text)
       raw = text.to_s
       # markdown:Nlurlrtitle  (and partial forms)
-      cleaned = raw.gsub(/#{PUA}markdown:\d+#{PUA}(?:#{PUA}l#{PUA}[^#{PUA}]*#{PUA}#{PUA}r#{PUA}[^#{PUA}]*#{PUA})?/, "")
-      cleaned = cleaned.gsub(/#{PUA}+/, "")
-      cleaned = cleaned.gsub(/\[\[[0-9]+\]\]\([^)]*\)/, "")
+      cleaned = raw.gsub(/#{PUA}markdown:\d+#{PUA}(?:#{PUA}l#{PUA}[^#{PUA}]*#{PUA}#{PUA}r#{PUA}[^#{PUA}]*#{PUA})?/, " ")
+      cleaned = cleaned.gsub(/#{PUA}+/, " ")
+      cleaned = cleaned.gsub(/\[\[[0-9]+\]\]\([^)]*\)/, " ")
       cleaned = cleaned.gsub(/([.!?])(\p{L})/, '\1 \2')
+      cleaned = cleaned.gsub(/[ \t]{2,}/, " ")
       cleaned.strip
     end
 

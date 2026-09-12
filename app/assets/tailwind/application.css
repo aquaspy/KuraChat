@@ -637,37 +637,62 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 .msg-body.md a { color: var(--accent-2); }
 .msg-meta, .msg-status { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.78rem; }
 .msg-error { margin: 0 0 0.5rem; color: #c45c4a; }
-.cite-fold {
-  margin: 0.45rem 0 0;
-  padding: 0.35rem 0 0;
-  border-top: 1px solid var(--line);
+.msg-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.7rem 0 0;
 }
+.msg-tool,
 .cite-fold > summary {
   list-style: none;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  color: var(--muted);
-  font-size: 0.78rem;
+  margin: 0;
+  padding: 0.28rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--input);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 550;
+  line-height: 1;
   user-select: none;
-  width: fit-content;
+}
+.msg-tool:hover,
+.cite-fold > summary:hover { background: var(--highlight); }
+.msg-tool svg,
+.cite-fold > summary svg { width: 0.9rem; height: 0.9rem; display: block; flex: none; }
+.cite-fold {
+  margin: 0;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .cite-fold > summary::-webkit-details-marker { display: none; }
-.cite-fold-mark {
-  display: block;
-  width: 0.32rem;
-  height: 0.32rem;
-  border-right: 1.4px solid currentColor;
-  border-bottom: 1.4px solid currentColor;
-  transform: rotate(-45deg);
-  transition: transform 0.12s ease;
+.cite-fold-n {
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--highlight);
+  color: var(--accent-2);
+  font-size: 0.72rem;
+  font-weight: 650;
 }
-.cite-fold[open] > summary .cite-fold-mark { transform: rotate(45deg); }
-.cite-fold-n { opacity: 0.75; }
+.cite-fold[open] > summary {
+  background: var(--highlight);
+  border-color: transparent;
+  color: var(--accent-2);
+}
 .citations {
   list-style: none;
-  padding: 0.45rem 0 0;
+  padding: 0.5rem 0 0;
   margin: 0;
   display: flex;
   flex-wrap: wrap;
