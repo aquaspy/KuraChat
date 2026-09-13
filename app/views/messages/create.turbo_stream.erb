@@ -8,3 +8,6 @@
 <%= turbo_stream.replace "conversation-list" do %>
   <%= render "conversations/list" %>
 <% end %>
+<%= turbo_stream.replace dom_id(@conversation, :web) do %>
+  <%= render "conversations/web_switch", conversation: @conversation %>
+<% end %>

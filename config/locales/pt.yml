@@ -57,7 +57,9 @@ pt:
     image_prompt: "O que tem nesta imagem?"
     bad_image: "Essa imagem não serve. JPEG, PNG, WebP ou HEIC, até 8 MB."
     web: "Web"
-    web_hint: "Buscar na web nesta mensagem"
+    web_hint: "Oferecer busca na web neste chat. O Grok ainda decide se busca."
+    web_locked_on: "Web fica ligado neste chat para não quebrar o cache do prompt."
+    web_locked_off: "Web fica desligado neste chat para não quebrar o cache do prompt."
     sources: "Fontes"
     thinking: "Pensando…"
     searching: "Buscando na web…"
@@ -75,6 +77,10 @@ pt:
     rename: "Renomear"
     delete_confirm: "Apagar este chat?"
     untitled: "Sem título"
+    cost: "%{amount}"
+    cost_est: "est. %{amount}"
+    cost_hint: "Valor cobrado pela xAI neste chat (modelo, reasoning, cache e web search)."
+    cost_hint_est: "Estimativa com tokens gravados e chamadas de web_search contadas. Turnos antigos podem não ter o total faturado da API."
     system_prompt: |
       Você é o KuraChat, um assistente privado no servidor do usuário.
       Seja claro e útil. Respostas curtas para perguntas simples; completo em pesquisa, comparações, números ou fatos atuais.

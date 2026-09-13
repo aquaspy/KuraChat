@@ -11,7 +11,7 @@ KuraChat is a self-hosted chat PWA. One SQLite file, no Redis, no third-party ch
 Public chat products are optimized for engagement and billing. KuraChat is optimized for **quality replies** and **obvious cost**.
 
 - **Grok for writing and reasoning.** The model is xAI Grok (default `grok-4.3`). You can pin a stronger model with env if you want.
-- **Web search is opt-in, per turn.** The composer has a **Web** toggle that defaults **off**. A casual message is one model call. Research is a deliberate switch — and a deliberate dollar. Grok decides whether to search and how much.
+- **Web search is opt-in, per chat.** The composer has a **Web** toggle that defaults **off**. The first message locks it for that conversation (flipping later would break prompt cache). Grok still decides whether to search and how much.
 - **Same bill as the model.** When Web is on, Grok uses xAI's server-side `web_search` on your existing `XAI_API_KEY`. No second search vendor.
 - **Honest threat model.** Messages are plaintext SQLite on this server. They are sent to xAI to generate replies. Attached photos live on this server's disk and are **re-sent to xAI** on later turns while that message is still in the model window. Deleting a chat purges its images. Web turns also send queries through xAI's search (and from there onto the public web). The app always sets `store=false`, so xAI is not asked to keep the chat. Chat turns send a `prompt_cache_key` (the conversation id) so xAI can reuse a prompt prefix on the same server — that is billing/latency, not storing the transcript. Optional Zero Data Retention is a team setting on the xAI console, not a model name. Share links let anyone with the URL read that chat (including photos). This is **not** end-to-end encryption.
 - **Same calm shell as the rest of Kura.** Cookie auth, idle lock (per device), PWA offline *reads*, Compose bound to localhost, signup you can shut off.
@@ -24,7 +24,7 @@ It sits next to [KuraNotes](https://github.com/aquaspy/KuraNotes), [KuraHome](ht
 
 - Multi-user instance; each person owns many conversations
 - Streaming replies over Action Cable / Turbo Streams
-- Per-turn **Web** toggle (remembered in the browser)
+- Per-chat **Web** toggle (chosen on the first message, remembered in the browser for new chats)
 - Attach one image per message (Grok sees it; follow-ups keep seeing it while that turn is in context)
 - Optional read-only share links (`/s/...`)
 - Automatic context compaction on very long threads (full transcript stays in SQLite)
@@ -150,13 +150,20 @@ YJIT stays **on**. Rails 8.1 enables it in production via `config.yjit`; the ima
 
 ---
 
-## Cost (rough)
+## Cost
 
-A casual grok-4.3 turn is about **$0.0045**. Turning **Web** on lets Grok call xAI `web_search` (~**$5 / 1k calls**, so about **$0.005** per search) plus the extra tokens from browsing. Grok decides how many searches, if any. There is **no** search intensity setting (no off/low/medium/high for the web tool).
+The chat bar shows a running USD total for that conversation. New turns use the amount xAI actually billed (`cost_in_usd_ticks`: model, cache, reasoning, images, and web_search). Older turns without that field fall back to the public list price plus counted `web_search` calls.
 
-Cached input is cheaper than a full prompt when the conversation prefix is unchanged. xAI bills a **2× long-context** rate once a request’s prompt (including cached tokens) reaches **200k**; compaction exists to stay under that, not because the model’s window is small. The Web toggle defaults **off**. Grok sees the thread until about **150k** estimated tokens. Past that, a short rolling summary plus about **32k** of recent raw messages. The full transcript stays in SQLite. Attached images are resized to JPEG before Grok sees them; image tokens bill as input (and should cache on follow-ups). This is **not** Grok Imagine — KuraChat does not generate pictures.
+**Web does not mean “this turn will search.”** The toggle only *offers* xAI’s `web_search` tool. Grok decides whether to call it and how many times. A greeting with Web on can cost **zero extra search fees**. Each successful search is billed at **$5 / 1k calls** (~**$0.005** each) plus the tokens from the pages.
 
-`XAI_REASONING_EFFORT` / `XAI_WEB_REASONING_EFFORT` are **how hard the model thinks** (`none` / `low` / `medium` / `high` / `xhigh`), not how much it searches. Defaults: `low` without Web, `medium` with Web so Grok can actually use what it found. Set them on the VPS; the UI only has the Web switch.
+What *does* always change with Web on:
+
+- **Thinking:** `XAI_WEB_REASONING_EFFORT` (default **`medium`**) instead of `XAI_REASONING_EFFORT` (default **`low`**). That is more reasoning tokens on *every* Web-on turn, even if Grok never searches. These envs are how hard the model thinks (`none` / `low` / `medium` / `high` / `xhigh`), not search volume. Set them on the VPS; the UI only has the Web switch.
+- **Prompt cache:** the system line that says “web this turn / no web this turn” sits early in the prompt. **Flipping the toggle mid-chat changes that prefix**, so later history and photos are less likely to hit the cheap cached-input rate. Leaving Web **on for a whole research chat** (or **off** for a casual one) is cheaper than toggling every message. Leaving Web on *all the time* still pays `medium` thinking on “hi” turns — that is usually not worth it.
+
+There is **no** search intensity setting (no off/low/medium/high for the web tool).
+
+Cached input is cheaper than a full prompt when the conversation prefix is unchanged. xAI bills a **2× long-context** rate once a request’s prompt (including cached tokens) reaches **200k**; compaction exists to stay under that, not because the model’s window is small. The Web toggle defaults **off** and **locks after the first message** in that chat. Start a new chat to change it. Grok sees the thread until about **150k** estimated tokens. Past that, a short rolling summary plus about **32k** of recent raw messages (`CHAT_KEEP_RECENT_TOKENS`). The full transcript stays in SQLite. Attached images are resized to JPEG before Grok sees them; image tokens bill as input (and should cache on follow-ups if the prefix is stable). This is **not** Grok Imagine — KuraChat does not generate pictures.
 
 ---
 
@@ -198,7 +205,7 @@ They sit on the same commit until the next change is under test.
 | `XAI_API_KEY` | Required to generate replies |
 | `XAI_MODEL` | Default `grok-4.3`. `grok-4.6` is stronger at tools |
 | `XAI_REASONING_EFFORT` | How hard Grok thinks on model-only turns. Default `low`. Not search volume. |
-| `XAI_WEB_REASONING_EFFORT` | Same, but for Web-on turns. Default `medium`. Still not search volume — Grok picks how much to search. |
+| `XAI_WEB_REASONING_EFFORT` | Same, but for Web-on turns. Default `medium`. Still not search volume — Grok picks how much to search. Applies even if it does not search. |
 | `CHAT_REPLY_MAX_TOKENS` | Optional hard cap on reply length. Unset = no cap |
 | `CHAT_WINDOW_TOKENS` | Max estimated tokens sent as Grok’s prompt. Default `150000` (under the 200k long-context price cliff) |
 | `CHAT_KEEP_RECENT_TOKENS` | After compaction, how much recent raw text to keep. Default `32000` |

@@ -1,0 +1,4 @@
+<% amount = chat_cost_label(conversation) %>
+<span id="<%= dom_id(conversation, :cost) %>" class="chat-cost<%= " is-empty" unless amount %>" title="<%= t(conversation.api_cost_billed? ? "chat.cost_hint" : "chat.cost_hint_est") %>"<% unless amount %> hidden<% end %>>
+  <% if amount %><%= t(chat_cost_i18n_key(conversation), amount: amount) %><% end %>
+</span>

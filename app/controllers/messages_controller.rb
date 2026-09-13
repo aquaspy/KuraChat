@@ -16,7 +16,7 @@ class MessagesController < ApplicationController
       @user_message = @conversation.messages.new(
         role: "user",
         content: params[:content].to_s,
-        web: ActiveModel::Type::Boolean.new.cast(params[:web]) || false
+        web: web_for_new_message
       )
       @user_message.image.attach(params[:image]) if params[:image].present?
       @user_message.save!
@@ -62,5 +62,11 @@ class MessagesController < ApplicationController
   private
     def set_conversation
       @conversation = current_user.conversations.find(params[:conversation_id])
+    end
+
+    def web_for_new_message
+      return @conversation.web_on? if @conversation.web_locked?
+
+      ActiveModel::Type::Boolean.new.cast(params[:web]) || false
     end
 end

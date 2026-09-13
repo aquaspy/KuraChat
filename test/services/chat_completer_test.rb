@@ -299,6 +299,7 @@ class ChatCompleterTest < ActiveSupport::TestCase
           "usage" => {
             "input_tokens" => 120,
             "output_tokens" => 8,
+            "cost_in_usd_ticks" => 37_756_000,
             "input_tokens_details" => { "cached_tokens" => 90 },
             "output_tokens_details" => { "reasoning_tokens" => 12 }
           }
@@ -308,7 +309,10 @@ class ChatCompleterTest < ActiveSupport::TestCase
     ChatCompleter.new(assistant, xai: xai).run
     assistant.reload
     assert_equal(
-      { "input_tokens" => 120, "cached_tokens" => 90, "output_tokens" => 8, "reasoning_tokens" => 12 },
+      {
+        "input_tokens" => 120, "cached_tokens" => 90, "output_tokens" => 8, "reasoning_tokens" => 12,
+        "cost_in_usd_ticks" => 37_756_000, "model" => "grok-4.3"
+      },
       assistant.token_usage
     )
     assert_equal [ reasoning ], assistant.raw["reasoning"]
@@ -341,6 +345,41 @@ class ChatCompleterTest < ActiveSupport::TestCase
     assert_equal({ role: "assistant", content: "Hello" }, payload[-2])
     assert_equal({ role: "user", content: "Again" }, payload[-1])
     assert user
+  end
+
+  test "token_usage_from keeps billed ticks and web_search call counts" do
+    usage = ChatCompleter.token_usage_from(
+      "model" => "grok-4.6",
+      "usage" => {
+        "input_tokens" => 10,
+        "output_tokens" => 4,
+        "cost_in_usd_ticks" => 50_000_000,
+        "server_side_tool_usage" => { "SERVER_SIDE_TOOL_WEB_SEARCH" => 2 }
+      }
+    )
+    assert_equal 50_000_000, usage["cost_in_usd_ticks"]
+    assert_equal 2, usage["web_search_calls"]
+    assert_equal "grok-4.6", usage["model"]
+  end
+
+  test "counts completed web_search stream events when usage omits the tool map" do
+    @chat.messages.create!(role: "user", content: "News?", web: true)
+    assistant = @chat.messages.create!(role: "assistant", status: "pending", content: "")
+    xai = FakeXai.new(events: [
+      { "type" => "response.web_search_call.in_progress" },
+      { "type" => "response.web_search_call.completed" },
+      { "type" => "response.web_search_call.completed" },
+      { "type" => "response.output_text.delta", "delta" => "Here." },
+      {
+        "type" => "response.completed",
+        "response" => {
+          "usage" => { "input_tokens" => 10, "output_tokens" => 2 }
+        }
+      }
+    ])
+    ChatCompleter.new(assistant, xai: xai).run
+    assistant.reload
+    assert_equal 2, assistant.token_usage["web_search_calls"]
   end
 
   test "citations_from dedupes urls from citations and annotations" do

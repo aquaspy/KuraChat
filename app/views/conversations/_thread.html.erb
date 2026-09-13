@@ -9,6 +9,7 @@
       <%= render "conversations/title_field", conversation: @conversation %>
     <% end %>
     <span class="bar-spacer"></span>
+    <%= render "conversations/cost", conversation: @conversation %>
     <%= render "conversations/share_button", conversation: @conversation %>
     <button type="button" class="icon-btn danger" data-action="confirm#open" data-url="<%= conversation_path(@conversation) %>" data-message="<%= t("chat.delete_confirm") %>" title="<%= t("app.delete") %>" aria-label="<%= t("app.delete") %>">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 5h9M6.2 5V3.8A1.2 1.2 0 0 1 7.4 2.6h1.2A1.2 1.2 0 0 1 9.8 3.8V5m-5.1 0 .5 7.2A1.3 1.3 0 0 0 6.5 13.4h3a1.3 1.3 0 0 0 1.3-1.2L11.3 5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
@@ -32,13 +33,8 @@
     <% end %>
   </div>
 
-  <%= form_with url: conversation_messages_path(@conversation), class: "composer", multipart: true, data: { controller: "composer web-toggle", composer_streaming_value: inflight, action: "keydown->composer#key paste->composer#paste turbo:submit-start->composer#start turbo:submit-end->composer#sent" } do %>
-    <label class="web-switch" title="<%= t("chat.web_hint") %>">
-      <%= check_box_tag :web, "1", false, class: "sr-only", role: "switch", aria: { label: t("chat.web_hint") }, data: { web_toggle_target: "box", action: "change->web-toggle#persist" } %>
-      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 2.8v10.4M2.8 8h10.4M4.1 4.6c1.2.9 2.5 1.4 3.9 1.4s2.7-.5 3.9-1.4M4.1 11.4c1.2-.9 2.5-1.4 3.9-1.4s2.7.5 3.9 1.4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-      <span class="web-switch-label"><%= t("chat.web") %></span>
-      <span class="web-switch-track" aria-hidden="true"><span class="web-switch-knob"></span></span>
-    </label>
+  <%= form_with url: conversation_messages_path(@conversation), class: "composer", multipart: true, data: { controller: "composer web-toggle", composer_streaming_value: inflight, web_toggle_locked_value: @conversation.web_locked?, web_toggle_on_value: @conversation.web_on?, web_toggle_locked_on_hint_value: t("chat.web_locked_on"), web_toggle_locked_off_hint_value: t("chat.web_locked_off"), action: "keydown->composer#key paste->composer#paste turbo:submit-start->composer#start turbo:submit-end->composer#sent turbo:submit-end->web-toggle#lockAfterSend" } do %>
+    <%= render "conversations/web_switch", conversation: @conversation %>
     <div class="composer-main">
       <div class="composer-chip" data-composer-target="chip" hidden>
         <img alt="" data-composer-target="thumb">

@@ -533,6 +533,24 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   font-size: 0.85rem;
 }
 .bar-spacer { flex: 1; }
+.chat-cost {
+  flex: 0 0 auto;
+  max-width: 6.4rem;
+  margin-inline: 0.15rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  cursor: help;
+}
+.chat-cost.is-empty { display: none; }
 .editor-bar .status { margin-inline: 0.4rem 0.75rem; }
 .editor-bar .back { display: none; }
 
@@ -831,6 +849,11 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   transition: transform 0.16s ease;
 }
 .web-switch:has(input:checked) .web-switch-knob { transform: translateX(0.74rem); }
+.web-switch.is-locked {
+  cursor: default;
+  opacity: 0.72;
+}
+.web-switch.is-locked:hover { color: inherit; }
 .title-form { flex: 1; min-width: 0; margin: 0; }
 .offline-banner {
   grid-column: 1 / -1;
@@ -962,6 +985,11 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
     -webkit-user-select: text;
   }
   .editor-bar .danger { padding: 0.45rem 0.55rem; font-size: 0.9rem; }
+  .chat-cost {
+    font-size: 0.7rem;
+    max-width: 5.6rem;
+    padding: 0.2rem 0.45rem;
+  }
 
   .note-body {
     width: 100%;

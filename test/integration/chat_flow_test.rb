@@ -67,6 +67,25 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     assert Conversation.exists?(keep.id)
   end
 
+  test "conversation bar shows estimated cost after stored usage" do
+    post conversations_path
+    chat = @user.conversations.last
+    chat.messages.create!(
+      role: "assistant",
+      status: "complete",
+      content: "Hello",
+      token_usage: {
+        "input_tokens" => 80_000, "cached_tokens" => 0, "output_tokens" => 20_000,
+        "reasoning_tokens" => 0, "cost_in_usd_ticks" => 1_250_000_000
+      }
+    )
+    get conversation_path(chat)
+    assert_response :success
+    assert_includes @response.body, "chat-cost"
+    assert_includes @response.body, TokenCost.format_usd(chat.estimated_api_cost)
+    assert_not_includes @response.body, "est. $0.12"
+  end
+
   test "portuguese locale labels a blank title as Sem título" do
     post conversations_path
     chat = @user.conversations.last
@@ -80,6 +99,35 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     chat = @other.conversations.create!(title: "Secret")
     get conversation_path(chat)
     assert_response :not_found
+  end
+
+  test "web flag on later messages follows the first user turn" do
+    chat = @user.conversations.create!
+    assert_enqueued_jobs 2, only: CompleteChatJob do
+      post conversation_messages_path(chat), params: { content: "News?", web: "1" }
+      chat.messages.where(role: "assistant").update_all(status: "complete", content: "ok")
+      post conversation_messages_path(chat), params: { content: "And now?", web: "0" }
+    end
+    assert_equal [ true, true ], chat.messages.where(role: "user").order(:id).pluck(:web)
+  end
+
+  test "web stays off when the first turn omitted it" do
+    chat = @user.conversations.create!
+    assert_enqueued_jobs 2, only: CompleteChatJob do
+      post conversation_messages_path(chat), params: { content: "Hi" }
+      chat.messages.where(role: "assistant").update_all(status: "complete", content: "ok")
+      post conversation_messages_path(chat), params: { content: "News?", web: "1" }
+    end
+    assert_equal [ false, false ], chat.messages.where(role: "user").order(:id).pluck(:web)
+  end
+
+  test "open chat with a user message shows a locked web switch" do
+    chat = @user.conversations.create!
+    chat.messages.create!(role: "user", content: "News?", web: true)
+    get conversation_path(chat)
+    assert_response :success
+    assert_includes @response.body, "is-locked"
+    assert_includes @response.body, "Web stays on"
   end
 
   test "posting a message enqueues completion" do

@@ -53,6 +53,24 @@ class RepetitionGuardTest < ActiveSupport::TestCase
     assert_equal "vence com 2M tokens (vs. 1M do 4.3)", cleaned
   end
 
+  test "strip_junk unsticks heading+prose and word+number after silent cite removal" do
+    raw = "AparênciaJovem de15 anos no início (nascido em20 de março de2003), cerca de173 cm.\nPersonalidadeBondoso, otimista."
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "Aparência Jovem de 15 anos no início (nascido em 20 de março de 2003), cerca de 173 cm.\nPersonalidade Bondoso, otimista.", cleaned
+  end
+
+  test "strip_junk unsticks bold heading glued to the next word" do
+    raw = "**Aparência**Jovem de15 anos"
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "**Aparência** Jovem de 15 anos", cleaned
+  end
+
+  test "strip_junk removes bare [[n]] cites without a url" do
+    raw = "Jovem de[[1]]15 anos e[[2]]173 cm"
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "Jovem de 15 anos e 173 cm", cleaned
+  end
+
   test "clean prose is not flagged" do
     text = "Uma resposta normal com um link [fonte](https://ok.example) e fim."
     assert_nil ChatCompleter::RepetitionGuard.check(text)

@@ -32,6 +32,15 @@ class MarkdownRendererTest < ActiveSupport::TestCase
     assert_not_includes html, "billa.cz"
   end
 
+  test "unsticks heading and number glues left after silent cite removal" do
+    html = MarkdownRenderer.render("AparênciaJovem de15 anos. PersonalidadeBondoso.")
+    assert_includes html, "Aparência Jovem"
+    assert_includes html, "de 15 anos"
+    assert_includes html, "Personalidade Bondoso"
+    assert_not_includes html, "AparênciaJovem"
+    assert_not_includes html, "de15"
+  end
+
   test "strips grok citation PUA tokens before render" do
     pua = "\uE000"
     junk = "#{pua}markdown:1#{pua}#{pua}l#{pua}https://example.com#{pua}#{pua}r#{pua}Example#{pua}"

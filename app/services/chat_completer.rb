@@ -40,6 +40,7 @@ class ChatCompleter
     citations = []
     @token_usage = {}
     @reasoning_items = []
+    @web_search_calls = 0
     truncated = false
     begin
       stream_released { |event|
@@ -247,6 +248,7 @@ class ChatCompleter
       end
 
       if type.include?("web_search")
+        @web_search_calls += 1 if type.end_with?("completed")
         checkout { broadcast_status(I18n.t("chat.searching")) }
       end
 
@@ -264,6 +266,11 @@ class ChatCompleter
       response = event["response"] || event
       citations.replace(self.class.citations_from(response))
       @token_usage = self.class.token_usage_from(response)
+      if @web_search_calls.positive? && @token_usage["web_search_calls"].to_i < @web_search_calls
+        @token_usage["web_search_calls"] = @web_search_calls
+      end
+      @token_usage.delete("web_search_calls") if @token_usage["web_search_calls"].to_i <= 0
+      @token_usage["model"] ||= ENV.fetch("XAI_MODEL", "grok-4.3") if @token_usage.present?
       @reasoning_items = self.class.reasoning_from(response)
     end
 
@@ -288,8 +295,25 @@ class ChatCompleter
         "input_tokens" => usage["input_tokens"] || usage["prompt_tokens"],
         "cached_tokens" => input_details.is_a?(Hash) ? input_details["cached_tokens"] : nil,
         "output_tokens" => usage["output_tokens"] || usage["completion_tokens"],
-        "reasoning_tokens" => output_details.is_a?(Hash) ? output_details["reasoning_tokens"] : nil
+        "reasoning_tokens" => output_details.is_a?(Hash) ? output_details["reasoning_tokens"] : nil,
+        "cost_in_usd_ticks" => usage["cost_in_usd_ticks"],
+        "web_search_calls" => web_search_calls_from(response).presence,
+        "model" => response["model"]
       }.compact
+    end
+
+    def self.web_search_calls_from(response)
+      usage = response.is_a?(Hash) ? response["usage"] : nil
+      if usage.is_a?(Hash)
+        map = usage["server_side_tool_usage"]
+        if map.is_a?(Hash)
+          n = map.sum { |key, count| key.to_s.match?(/web_search/i) ? count.to_i : 0 }
+          return n if n.positive?
+        end
+      end
+      Array(response["output"]).count { |item|
+        item.is_a?(Hash) && item["type"].to_s.include?("web_search")
+      }
     end
 
     def self.reasoning_from(response)
@@ -373,6 +397,7 @@ class ChatCompleter
       @assistant.update!(attrs)
       broadcast_body
       broadcast_message
+      broadcast_cost
     end
 
     def auto_title!
@@ -458,6 +483,15 @@ class ChatCompleter
         target: ActionView::RecordIdentifier.dom_id(@assistant),
         partial: "messages/message",
         locals: { message: @assistant, conversation: @conversation }
+      )
+    end
+
+    def broadcast_cost
+      Turbo::StreamsChannel.broadcast_replace_to(
+        [ @conversation.user, @conversation ],
+        target: ActionView::RecordIdentifier.dom_id(@conversation, :cost),
+        partial: "conversations/cost",
+        locals: { conversation: @conversation }
       )
     end
 

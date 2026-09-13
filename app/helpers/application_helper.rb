@@ -14,6 +14,14 @@ module ApplicationHelper
     conversation.messages.where(role: "assistant", status: %w[pending streaming]).exists?
   end
 
+  def chat_cost_label(conversation)
+    TokenCost.format_usd(conversation.estimated_api_cost)
+  end
+
+  def chat_cost_i18n_key(conversation)
+    conversation.api_cost_billed? ? "chat.cost" : "chat.cost_est"
+  end
+
   def message_image_tag(message)
     return unless message.image.attached?
 

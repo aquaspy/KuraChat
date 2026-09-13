@@ -38,6 +38,31 @@ class Conversation < ApplicationRecord
     update!(share_token: nil)
   end
 
+  def token_usages
+    messages.where(role: "assistant").where.not(token_usage: nil).pluck(:token_usage)
+  end
+
+  def estimated_api_cost
+    TokenCost.usd_for_many(token_usages)
+  end
+
+  def api_cost_billed?
+    rows = token_usages
+    rows.any? && rows.all? { |u| TokenCost.billed?(u) }
+  end
+
+  def first_user_message
+    messages.where(role: "user").order(:id).first
+  end
+
+  def web_locked?
+    first_user_message.present?
+  end
+
+  def web_on?
+    first_user_message&.web? || false
+  end
+
   def self.reclaim_space
     return if Message.where(status: %w[pending streaming]).exists?
 
