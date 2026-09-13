@@ -59,6 +59,18 @@ class RepetitionGuardTest < ActiveSupport::TestCase
     assert_equal "Aparência Jovem de 15 anos no início (nascido em 20 de março de 2003), cerca de 173 cm.\nPersonalidade Bondoso, otimista.", cleaned
   end
 
+  test "strip_junk tightens spaces that would break **bold** markers" do
+    raw = "usuário das técnicas ** Limitless** e ** Six Eyes**."
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "usuário das técnicas **Limitless** e **Six Eyes**.", cleaned
+  end
+
+  test "strip_junk tightens a cite that landed inside a bold span" do
+    raw = "técnicas **[[1]](https://x.example)Limitless** e **#{PUA}Six Eyes**."
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_equal "técnicas **Limitless** e **Six Eyes**.", cleaned
+  end
+
   test "strip_junk unsticks bold heading glued to the next word" do
     raw = "**Aparência**Jovem de15 anos"
     cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)

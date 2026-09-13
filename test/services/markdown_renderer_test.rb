@@ -18,6 +18,14 @@ class MarkdownRendererTest < ActiveSupport::TestCase
     assert_not_includes spaced, "<a>"
   end
 
+  test "bold still renders when a space sat inside the markers" do
+    html = MarkdownRenderer.render("técnicas ** Limitless** e ** Six Eyes**.")
+    assert_includes html, "<strong>Limitless</strong>"
+    assert_includes html, "<strong>Six Eyes</strong>"
+    assert_not_includes html, "** Limitless"
+    assert_not_includes html, "** Six"
+  end
+
   test "a full-sentence bold line becomes strong, not literal asterisks" do
     html = MarkdownRenderer.render("**Sim, dá pra pedir, mas com jeitinho e respeito.**")
     assert_includes html, "<strong>"

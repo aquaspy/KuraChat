@@ -48,6 +48,9 @@ class ChatCompleter
       cleaned = cleaned.gsub(/(\p{Ll})(\p{Lu})/, '\1 \2')
       cleaned = cleaned.gsub(/(\p{L})(\d)/, '\1 \2')
       cleaned = cleaned.gsub(/[ \t]{2,}/, " ")
+      # A cite (or a leftover space) sitting just inside **…** becomes
+      # `** Limitless**`, which CommonMark leaves as literal asterisks.
+      cleaned = cleaned.gsub(/\*\*([^*]+)\*\*/) { "**#{$1.strip}**" }
       cleaned.strip
     end
 
