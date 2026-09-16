@@ -24,7 +24,7 @@ gem "bcrypt", "~> 3.1.7"
 gem "commonmarker", "~> 2.3"
 
 # Resize/convert attached chat images (Vips) before they go to Grok
-gem "image_processing", "~> 1.14"
+gem "image_processing", "~> 2.1"
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
