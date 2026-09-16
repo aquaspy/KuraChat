@@ -630,7 +630,7 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   border-radius: 0.85rem 0.85rem 0.85rem 0.2rem;
   padding: 0.7rem 0.85rem;
 }
-.msg-body { font-size: 1rem; line-height: 1.55; }
+.msg-body { font-size: 1rem; line-height: 1.55; overflow-wrap: anywhere; }
 .msg-body p { margin: 0 0 0.6rem; }
 .msg-body p:last-child { margin-bottom: 0; }
 .msg-body.md :is(h1, h2, h3, h4, h5, h6) {
@@ -647,12 +647,48 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 .msg-body.md h6 { font-size: 1rem; }
 .msg-body.md pre {
   overflow: auto;
+  margin: 0 0 0.6rem;
   padding: 0.7rem 0.8rem;
   background: var(--input);
   border-radius: 0.45rem;
   font-size: 0.85rem;
 }
 .msg-body.md a { color: var(--accent-2); }
+.msg-body.md ul, .msg-body.md ol { margin: 0 0 0.6rem; padding-left: 1.4rem; }
+.msg-body.md ul { list-style: disc; }
+.msg-body.md ol { list-style: decimal; }
+.msg-body.md li { margin: 0.2rem 0; }
+.msg-body.md li > :is(ul, ol) { margin-bottom: 0; }
+.msg-body.md blockquote {
+  margin: 0 0 0.6rem;
+  padding: 0.15rem 0 0.15rem 0.8rem;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+}
+.msg-body.md blockquote > :last-child { margin-bottom: 0; }
+.msg-body.md code {
+  font-size: 0.85em;
+  background: var(--input);
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.3rem;
+}
+.msg-body.md pre code { font-size: inherit; background: transparent; border: 0; padding: 0; }
+.msg-body.md table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 0.6rem;
+  font-size: 0.9rem;
+}
+.msg-body.md th, .msg-body.md td { border: 1px solid var(--line); padding: 0.3rem 0.55rem; text-align: left; }
+.msg-body.md :is(th, td)[align="center"] { text-align: center; }
+.msg-body.md :is(th, td)[align="right"] { text-align: right; }
+.msg-body.md thead th { background: var(--input); }
+.msg-body.md hr { border: 0; border-top: 1px solid var(--line); margin: 0.8rem 0; }
+.msg-body.md :is(ul, ol, blockquote, table, pre, hr):last-child { margin-bottom: 0; }
 .msg-meta, .msg-status { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.78rem; }
 .msg-error { margin: 0 0 0.5rem; color: #c45c4a; }
 .msg-toolbar {

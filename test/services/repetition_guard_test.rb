@@ -87,4 +87,44 @@ class RepetitionGuardTest < ActiveSupport::TestCase
     text = "Uma resposta normal com um link [fonte](https://ok.example) e fim."
     assert_nil ChatCompleter::RepetitionGuard.check(text)
   end
+
+  test "strip_junk leaves urls, abbreviations and filenames intact" do
+    raw = "See https://example.com/docs and www.example.com, e.g. file.txt ok."
+    assert_equal raw, ChatCompleter::RepetitionGuard.strip_junk(raw)
+  end
+
+  test "strip_junk splits glued sentences but keeps ALLCAPS terms" do
+    guard = ChatCompleter::RepetitionGuard
+    assert_equal "Hello Mr. Smith here", guard.strip_junk("Hello Mr.Smith here")
+    assert_equal "GPT4 and H2O rock, de 15 anos", guard.strip_junk("GPT4 and H2O rock, de15 anos")
+    assert_equal "wow! now? yes", guard.strip_junk("wow!now?yes")
+  end
+
+  test "strip_junk splits digit-first glue but keeps counts like 2M" do
+    assert_equal "tem 15 anos e 2M tokens", ChatCompleter::RepetitionGuard.strip_junk("tem 15anos e 2M tokens")
+  end
+
+  test "strip_junk removes cites whose urls contain parens" do
+    raw = "X[[1]](https://en.wikipedia.org/wiki/N_(a))Y."
+    assert_equal "X Y.", ChatCompleter::RepetitionGuard.strip_junk(raw)
+  end
+
+  test "strip_junk leaves fenced code blocks untouched" do
+    code = "Mr.Smith called de15 with [[1]] and ** x** ok"
+    raw = "Intro.[[2]](https://x.ai)More.\n```\n#{code}\n```\n"
+    cleaned = ChatCompleter::RepetitionGuard.strip_junk(raw)
+    assert_includes cleaned, code
+    assert_includes cleaned, "Intro. More."
+    assert_not_includes cleaned, "x.ai"
+  end
+
+  test "strip_junk leaves inline code spans untouched" do
+    assert_equal "Run `Mr.Smith de15` now.",
+      ChatCompleter::RepetitionGuard.strip_junk("Run `Mr.Smith de15` now.")
+  end
+
+  test "strip_junk preserves leading indentation for lists and code" do
+    raw = "- a\n  - b\n\n    indented(1)\n"
+    assert_equal "- a\n  - b\n\n    indented(1)", ChatCompleter::RepetitionGuard.strip_junk(raw)
+  end
 end

@@ -36,23 +36,81 @@ class ChatCompleter
     end
 
     def self.strip_junk(text)
-      raw = text.to_s
+      safe, stash = protect_code(text.to_s)
       # markdown:Nlurlrtitle  (and partial forms)
-      cleaned = raw.gsub(/#{PUA}markdown:\d+#{PUA}(?:#{PUA}l#{PUA}[^#{PUA}]*#{PUA}#{PUA}r#{PUA}[^#{PUA}]*#{PUA})?/, " ")
+      cleaned = safe.gsub(/#{PUA}markdown:\d+#{PUA}(?:#{PUA}l#{PUA}[^#{PUA}]*#{PUA}#{PUA}r#{PUA}[^#{PUA}]*#{PUA})?/, " ")
       cleaned = cleaned.gsub(/#{PUA}+/, " ")
       # [[n]] or [[n]](url) — xAI sometimes omits the URL, or strips the cite
-      # with no_inline_citations and leaves the two sides glued.
-      cleaned = cleaned.gsub(/\[\[[0-9]+\]\](?:\([^)]*\))?/, " ")
+      # with no_inline_citations and leaves the two sides glued. The URL may
+      # itself contain parens (e.g. wiki links), so match one nesting level.
+      cleaned = cleaned.gsub(/\[\[[0-9]+\]\](?:\((?:[^()]|\([^()]*\))*\))?/, " ")
       cleaned = cleaned.gsub(/(\*\*[^*]+\*\*)(\p{L})/, '\1 \2')
-      cleaned = cleaned.gsub(/([.!?])(\p{L})/, '\1 \2')
+      # Unstick glued sentences, but a period only splits before a capital —
+      # bare domains, filenames and abbreviations (example.com, file.txt,
+      # e.g.) stay intact. ! and ? rarely sit inside words.
+      cleaned = cleaned.gsub(/(\.)(\p{Lu})/, '\1 \2')
+      cleaned = cleaned.gsub(/([!?])(\p{L})/, '\1 \2')
       cleaned = cleaned.gsub(/(\p{Ll})(\p{Lu})/, '\1 \2')
-      cleaned = cleaned.gsub(/(\p{L})(\d)/, '\1 \2')
-      cleaned = cleaned.gsub(/[ \t]{2,}/, " ")
+      # Split letter+digit glue (de15), but leave ALLCAPS terms (GPT4, H2O);
+      # also catch digit-first glue (15anos) while keeping counts (2M).
+      cleaned = cleaned.gsub(/(\p{Ll})(\d)/, '\1 \2')
+      cleaned = cleaned.gsub(/(\d)(\p{Ll})/, '\1 \2')
+      cleaned = collapse_spaces(cleaned)
       # A cite (or a leftover space) sitting just inside **…** becomes
       # `** Limitless**`, which CommonMark leaves as literal asterisks.
       cleaned = cleaned.gsub(/\*\*([^*]+)\*\*/) { "**#{$1.strip}**" }
-      cleaned.strip
+      restore_code(cleaned.strip, stash)
     end
+
+    # Stashes fenced code blocks and inline code spans behind inert
+    # placeholders so cleanup phases never rewrite code. Returns
+    # [safe_text, stash]; restore with restore_code.
+    def self.protect_code(text)
+      sentinel = [ "\uE001", "\uE002", "\uE003" ].find { |s| !text.include?(s) } || "\uE001"
+      blocks = []
+      stash = ->(code) do
+        blocks << code
+        "#{sentinel}#{blocks.size - 1}#{sentinel}"
+      end
+
+      lines = text.lines
+      out = +""
+      i = 0
+      while i < lines.size
+        open = lines[i].match(/\A {0,3}(`{3,}|~{3,})/)
+        if open
+          char = open[1][0]
+          len = open[1].length
+          close = /\A {0,3}#{char}{#{len},}[ \t]*(?:\n|\z)/
+          j = i + 1
+          j += 1 while j < lines.size && !close.match?(lines[j])
+          j += 1 if j < lines.size
+          out << stash.call(lines[i...j].join)
+          i = j
+        else
+          out << lines[i]
+          i += 1
+        end
+      end
+
+      safe = out.gsub(/``[^`\n]+``|`[^`\n]+`/) { |span| stash.call(span) }
+      [ safe, [ sentinel, blocks ] ]
+    end
+
+    def self.restore_code(safe, stash)
+      sentinel, blocks = stash
+      safe.gsub(/#{Regexp.escape(sentinel)}(\d+)#{Regexp.escape(sentinel)}/) { blocks[Regexp.last_match(1).to_i] }
+    end
+
+    # Collapse mid-line space runs, but keep leading indentation so
+    # nested lists and indented code blocks still parse.
+    def self.collapse_spaces(text)
+      text.lines.map do |line|
+        indent = line[/\A[ \t]*/]
+        indent + line[indent.length..].gsub(/[ \t]{2,}/, " ")
+      end.join
+    end
+    private_class_method :collapse_spaces
 
     def self.closing_loop?(text)
       tail = text.length > TAIL_CHARS ? text[-TAIL_CHARS..] : text

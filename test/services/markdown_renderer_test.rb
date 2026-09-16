@@ -57,4 +57,63 @@ class MarkdownRendererTest < ActiveSupport::TestCase
     assert_not_includes html, "markdown:1"
     assert_not_includes html, pua
   end
+
+  test "links keep their href and open in a new tab" do
+    html = MarkdownRenderer.render("[Example](https://example.com/x) and https://example.com/docs plus [m](mailto:a@b.co)")
+    assert_includes html, 'href="https://example.com/x"'
+    assert_includes html, 'href="https://example.com/docs"'
+    assert_includes html, 'href="mailto:a@b.co"'
+    assert_includes html, 'target="_blank"'
+    assert_includes html, 'rel="noopener noreferrer nofollow"'
+  end
+
+  test "unsafe link protocols stay stripped" do
+    html = MarkdownRenderer.render("[click](javascript:alert(1)) [d](data:text/html,hi)")
+    assert_not_includes html, "javascript"
+    assert_not_includes html, "data:text"
+    assert_not_includes html, "target="
+  end
+
+  test "code language class and table alignment survive sanitize" do
+    html = MarkdownRenderer.render("```ruby\nputs 1\n```\n")
+    assert_includes html, 'class="language-ruby"'
+    aligned = MarkdownRenderer.render("| a |\n|:---:|\n| x |\n")
+    assert_includes aligned, 'align="center"'
+  end
+
+  test "fenced code blocks pass through untouched" do
+    md = "```sh\n#!/bin/bash\nusers.map(&:name)\n#not a heading\n```\nVisit https://example.com/docs now."
+    html = MarkdownRenderer.render(md)
+    assert_includes html, "#!/bin/bash"
+    assert_includes html, "users.map"
+    assert_includes html, "#not a heading"
+    assert_includes html, 'href="https://example.com/docs"'
+  end
+
+  test "inline code spans pass through untouched" do
+    html = MarkdownRenderer.render("Use `x = [[1]]` and `myVar` ok.")
+    assert_includes html, "<code>x = [[1]]</code>"
+    assert_includes html, "<code>myVar</code>"
+  end
+
+  test "nested lists stay nested and indented code stays code" do
+    html = MarkdownRenderer.render("- a\n  - b\n")
+    assert_equal 2, html.scan("<ul>").size
+    code = MarkdownRenderer.render("Para:\n\n    code_line(1)\n")
+    assert_includes code, "<pre><code>code_line(1)"
+  end
+
+  test "prose cleanup leaves urls, abbreviations and model names alone" do
+    html = MarkdownRenderer.render("See https://example.com/docs, e.g. file.txt, GPT4 and H2O.")
+    assert_includes html, "e.g."
+    assert_includes html, "file.txt"
+    assert_includes html, "GPT4"
+    assert_includes html, "H2O"
+    assert_includes html, 'href="https://example.com/docs"'
+  end
+
+  test "tight headings are repaired mid-document" do
+    html = MarkdownRenderer.render("Intro\n\n###2. Hello\n")
+    assert_includes html, "<h3>2. Hello</h3>"
+  end
 end
