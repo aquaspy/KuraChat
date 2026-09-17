@@ -1,9 +1,13 @@
 # KuraChat bench
 
-A small, reproducible harness that compares chat models on **billed cost,
-tokens, latency, and blind quality** — the numbers behind KuraChat's
+A small, reproducible harness that compares chat models on **billed cost**
+(tokens and latency as supporting signals) — the numbers behind KuraChat's
 "obvious cost" claim. It is a dev tool, not app code: nothing here is
 loaded by the Rails app.
+
+It deliberately scores **no quality metric**. `--report` also emits blind
+output sheets so a human can sanity-check that cheap answers are
+acceptable — but those never collapse into a number.
 
 ## Official suite
 
@@ -11,7 +15,9 @@ Grok models via the xAI API, all on low reasoning effort (effort is pinned
 so the bench isolates *model* differences; KuraChat itself defaults to
 medium effort on web turns):
 
-- `grok-build-0.1`, `grok-4.3`, `grok-4.20-0309-reasoning`, `grok-4.5`, `grok-4.6`
+- `grok-build-0.1`, `grok-4.3`, `grok-4.20-0309-reasoning`,
+  `grok-4.20-multi-agent-0309`, `grok-4.20-0309-non-reasoning`,
+  `grok-4.5`, `grok-4.6`
 
 16 scenarios: 3 web-search (incl. a greeting-with-search-on skip check),
 3 reasoning, 3 writing (one in PT), 2 code, 2 explainers, 1 vision turn,

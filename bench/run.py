@@ -1,6 +1,7 @@
-"""KuraChat bench: compare chat models on cost, tokens, latency, quality.
+"""KuraChat bench: compare chat models on billed cost (tokens/latency supporting).
 
-Official suite: Grok models, low effort. OpenRouter arms optional.
+No quality scoring; blind sheets are for human sanity checks only.
+Official suite: Grok models. OpenRouter arms optional.
 
 Cost oracle: xAI cost_in_usd_ticks; OpenRouter /generation total_cost
 (fallback: computed from /models pricing x tokens). Hard spend cap enforced.
@@ -24,6 +25,8 @@ ARM_SETS = {
         {"id": "grok-build", "kind": "xai", "model": "grok-build-0.1"},
         {"id": "grok43", "kind": "xai", "model": "grok-4.3"},
         {"id": "grok420", "kind": "xai", "model": "grok-4.20-0309-reasoning"},
+        {"id": "grok420m", "kind": "xai", "model": "grok-4.20-multi-agent-0309"},
+        {"id": "grok420n", "kind": "xai", "model": "grok-4.20-0309-non-reasoning"},
         {"id": "grok45", "kind": "xai", "model": "grok-4.5"},
         {"id": "grok46", "kind": "xai", "model": "grok-4.6"},
     ],

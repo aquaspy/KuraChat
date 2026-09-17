@@ -174,12 +174,26 @@ This bench measures **cost only, not quality**: billed USD for the same 16 scena
 | Model | low | medium | high |
 | --- | --- | --- | --- |
 | grok-4.3 | $0.10 | $0.10 | $0.14 |
+| grok-4.20-0309-non-reasoning \* | $0.11 | $0.09 | $0.13 |
 | grok-4.20-0309-reasoning \* | $0.12 | $0.15 | $0.12 |
 | grok-4.5 | $0.13 | $0.20 | $0.21 |
 | grok-4.6 | $0.15 | $0.25 | $0.19 |
 | grok-build-0.1 \* | $0.20 | $0.22 | $0.18 |
+| grok-4.20-multi-agent-0309 | $0.77 | $0.66 | >$2 † |
 
-Run 2026-09-17, billed `cost_in_usd_ticks`, single run per cell. \* `grok-build-0.1` and the 4.20 reasoning snapshots reject the effort parameter, so their columns differ only by run variance (Grok decides search counts itself). Reproduce with `bench/` — see [bench/README.md](bench/README.md).
+Run 2026-09-17, billed `cost_in_usd_ticks`, single run per cell. \* `grok-build-0.1`, `grok-4.20-0309-reasoning`, and `grok-4.20-0309-non-reasoning` reject the effort parameter, so their columns differ only by run variance (Grok decides search counts itself). † Multi-agent at high effort blew the $2/run cap in 4 calls — one search turn billed $1.27 on 1.3M input tokens. Not a chat model. Reproduce with `bench/` — see [bench/README.md](bench/README.md).
+
+Speed (total request time, low effort, same 16 scenarios):
+
+| Model | p50 | pmax |
+| --- | --- | --- |
+| grok-4.20-0309-non-reasoning | 3s | 10s |
+| grok-4.3 | 5s | 14s |
+| grok-4.20-0309-reasoning | 7s | 21s |
+| grok-4.5 | 7s | 24s |
+| grok-4.6 | 7s | 22s |
+| grok-4.20-multi-agent-0309 | 11s | 36s |
+| grok-build-0.1 | 17s | 62s |
 
 ---
 
