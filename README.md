@@ -174,12 +174,12 @@ This bench measures **cost only, not quality**: billed USD for the same 16 scena
 | Model | low | medium | high |
 | --- | --- | --- | --- |
 | grok-4.3 | $0.10 | $0.10 | $0.14 |
-| grok-4.20-0309-reasoning | $0.12 | $0.15 | $0.12 |
+| grok-4.20-0309-reasoning \* | $0.12 | $0.15 | $0.12 |
 | grok-4.5 | $0.13 | $0.20 | $0.21 |
 | grok-4.6 | $0.15 | $0.25 | $0.19 |
-| grok-build-0.1 | $0.20 | $0.22 | $0.18 |
+| grok-build-0.1 \* | $0.20 | $0.22 | $0.18 |
 
-Run 2026-09-17, billed `cost_in_usd_ticks`, single run per cell. `grok-build-0.1` and the 4.20 reasoning snapshots reject the effort parameter, so their columns differ only by run variance (Grok decides search counts itself). Reproduce with `bench/` — see [bench/README.md](bench/README.md).
+Run 2026-09-17, billed `cost_in_usd_ticks`, single run per cell. \* `grok-build-0.1` and the 4.20 reasoning snapshots reject the effort parameter, so their columns differ only by run variance (Grok decides search counts itself). Reproduce with `bench/` — see [bench/README.md](bench/README.md).
 
 ---
 
