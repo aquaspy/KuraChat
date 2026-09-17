@@ -81,4 +81,24 @@ class XaiClientTest < ActiveSupport::TestCase
     error = assert_raises(Xai::Error) { Xai::Client.new(api_key: "") }
     assert_equal "missing_key", error.message
   end
+
+  test "stream_response omits reasoning_effort for models without effort support" do
+    %w[grok-build-0.1 grok-4.20-0309-reasoning grok-4.20-0309-non-reasoning].each do |model|
+      client = CaptureClient.new(api_key: "x", model: model)
+      client.stream_response(input: [ { role: "user", content: "Hi" } ], reasoning_effort: "low")
+      refute client.payload.key?(:reasoning_effort), "expected no effort for #{model}"
+    end
+  end
+
+  test "complete omits reasoning_effort for models without effort support" do
+    client = CaptureClient.new(api_key: "x", model: "grok-build-0.1")
+    client.complete(input: [ { role: "user", content: "Title me" } ])
+    refute client.payload.key?(:reasoning_effort)
+  end
+
+  test "stream_response keeps reasoning_effort for the multi-agent model" do
+    client = CaptureClient.new(api_key: "x", model: "grok-4.20-multi-agent-0309")
+    client.stream_response(input: [ { role: "user", content: "Hi" } ], reasoning_effort: "low")
+    assert_equal "low", client.payload[:reasoning_effort]
+  end
 end

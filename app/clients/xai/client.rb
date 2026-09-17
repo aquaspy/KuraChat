@@ -9,6 +9,11 @@ module Xai
   class Client
     BASE = URI("https://api.x.ai/v1")
 
+    # Models that 400 on reasoning_effort; omit it and the server default applies.
+    # Verified 2026-09-17: grok-4.20-multi-agent-0309 DOES accept it, so the
+    # 4.20 entries stay specific instead of a broad grok-4.20 prefix.
+    NO_EFFORT_PREFIXES = %w[grok-build grok-4.20-0309-reasoning grok-4.20-0309-non-reasoning].freeze
+
     def initialize(api_key: ENV["XAI_API_KEY"], model: ENV.fetch("XAI_MODEL", "grok-4.3"))
       @api_key = api_key.to_s
       @model = model
@@ -41,14 +46,18 @@ module Xai
     end
 
     private
+      def effort_supported?
+        NO_EFFORT_PREFIXES.none? { |prefix| @model.to_s.start_with?(prefix) }
+      end
+
       def response_body(input:, tools: nil, max_output_tokens: nil, reasoning_effort:, stream:, prompt_cache_key: nil)
         body = {
           model: @model,
           input: input,
           stream: stream,
-          store: false,
-          reasoning_effort: reasoning_effort
+          store: false
         }
+        body[:reasoning_effort] = reasoning_effort if effort_supported?
         body[:tools] = tools if tools.present?
         body[:max_output_tokens] = max_output_tokens if max_output_tokens
         body[:prompt_cache_key] = prompt_cache_key if prompt_cache_key.present?

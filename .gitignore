@@ -37,3 +37,9 @@
 
 /app/assets/builds/*
 !/app/assets/builds/.keep
+
+# Bench tooling: ignore Python bytecode and blind-sheet mappings
+# (mappings stay local until rankings are in, or the blind is spoiled).
+__pycache__/
+*.pyc
+/bench/results/*.mapping.json
