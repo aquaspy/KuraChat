@@ -5,7 +5,7 @@
     <%= link_to conversations_path(q: @query), class: "icon-btn back", aria: { label: t("app.cancel") } do %>
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.2 3.2 5.4 8l4.8 4.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <% end %>
-    <%= form_with model: @conversation, class: "title-form", data: { turbo: true } do %>
+    <%= form_with model: @conversation, class: "title-form", data: { controller: "title", action: "submit->title#sync turbo:submit-start->title#start turbo:submit-end->title#end", turbo: true } do %>
       <%= render "conversations/title_field", conversation: @conversation %>
     <% end %>
     <span class="bar-spacer"></span>

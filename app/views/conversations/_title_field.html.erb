@@ -1,1 +1,1 @@
-<%= text_field_tag "conversation[title]", conversation.title, id: dom_id(conversation, :title_field), placeholder: t("chat.untitled"), class: "folder-input", autocomplete: "off", aria: { label: t("chat.rename") } %>
+<%= text_field_tag "conversation[title]", conversation.title, id: dom_id(conversation, :title_field), placeholder: t("chat.untitled"), class: "folder-input", autocomplete: "off", aria: { label: t("chat.rename") }, data: { title_target: "input", action: "input->title#schedule focusout->title#save" } %>

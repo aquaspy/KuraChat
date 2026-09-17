@@ -217,4 +217,13 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_includes @response.body, %(input-&gt;composer#resize input-&gt;composer#sync)
   end
+
+  test "title field auto-saves while typing" do
+    chat = @user.conversations.create!
+    get conversation_path(chat)
+    assert_response :success
+    assert_includes @response.body, %(data-controller="title")
+    assert_includes @response.body, %(input-&gt;title#schedule focusout-&gt;title#save)
+    assert_includes @response.body, %(submit-&gt;title#sync turbo:submit-start-&gt;title#start turbo:submit-end-&gt;title#end)
+  end
 end

@@ -150,6 +150,8 @@ class ChatCompleterTest < ActiveSupport::TestCase
     assert_match(/never invent urls/i, turn_ctx)
     assert_match(/Current date: \d{4}-\d{2}-\d{2}/, turn_ctx)
     assert_includes turn_ctx, "America/Sao_Paulo"
+    # Stable web line first so the cached prefix survives midnight; date stays for recency.
+    assert turn_ctx.index("Live web search is available") < turn_ctx.index("Current date:")
     assert_equal({ type: "web_search" }, ChatCompleter::WEB_SEARCH_TOOL)
   end
 

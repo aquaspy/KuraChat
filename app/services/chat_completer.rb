@@ -117,7 +117,7 @@ class ChatCompleter
       now = Time.zone.now
       date = "Current date: #{now.strftime("%Y-%m-%d %A")} (#{Time.zone.tzinfo.identifier})."
       web_line = I18n.t(web? ? "chat.system_web" : "chat.system_no_web", locale: @locale)
-      { role: "system", content: "#{date}\n#{web_line}" }
+      { role: "system", content: "#{web_line}\n#{date}" }
     end
 
     def summary_message
