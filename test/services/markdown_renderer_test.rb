@@ -116,4 +116,45 @@ class MarkdownRendererTest < ActiveSupport::TestCase
     html = MarkdownRenderer.render("Intro\n\n###2. Hello\n")
     assert_includes html, "<h3>2. Hello</h3>"
   end
+
+  test "splits a table header glued to a heading" do
+    md = "### Principais diferenças| Aspecto | Orca |\n|---|---|\n| x | y |\n"
+    html = MarkdownRenderer.render(md)
+    assert_includes html, "<h3>Principais diferenças</h3>"
+    assert_includes html, "<table>"
+    assert_includes html, "<th>Aspecto</th>"
+    assert_not_includes html, "diferenças|"
+  end
+
+  test "leaves a heading with pipes alone when no table follows" do
+    html = MarkdownRenderer.render("### A | B\n\nSome text\n")
+    assert_includes html, "<h3>A | B</h3>"
+    assert_not_includes html, "<table>"
+  end
+
+  test "splits a list item glued to a heading" do
+    html = MarkdownRenderer.render("### Resumo- item one\n- item two\n")
+    assert_includes html, "<h3>Resumo</h3>"
+    assert_includes html, "<ul>"
+    assert_includes html, "<li>item one</li>"
+    assert_includes html, "<li>item two</li>"
+  end
+
+  test "splits an ordered item glued to a heading" do
+    html = MarkdownRenderer.render("### Ranking1. Ana\n2. Bia\n")
+    assert_includes html, "<h3>Ranking</h3>"
+    assert_includes html, "<ol>"
+  end
+
+  test "leaves hyphenated headings alone without list context" do
+    html = MarkdownRenderer.render("### Pré- processamento\nTexto\n")
+    assert_includes html, "<h3>Pré- processamento</h3>"
+    assert_not_includes html, "<ul>"
+  end
+
+  test "leaves spaced dashes in headings alone even before a list" do
+    html = MarkdownRenderer.render("### Prós - contras\n- item\n")
+    assert_includes html, "<h3>Prós - contras</h3>"
+    assert_includes html, "<li>item</li>"
+  end
 end
