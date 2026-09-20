@@ -4,6 +4,13 @@ export default class extends Controller {
   static targets = ["input", "submit", "file", "chips"]
   static values = { streaming: Boolean, maxImages: Number, removeLabel: String }
 
+  // Field initializers run at construction: Stimulus fires value-changed
+  // callbacks (sync -> hasFile) before connect(), so this state must
+  // already exist. connect() still resets it on every reconnect.
+  sending = false
+  chosen = []
+  previewUrls = []
+
   connect() {
     this.sending = false
     this.chosen = []
