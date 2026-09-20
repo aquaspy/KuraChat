@@ -53,9 +53,9 @@ pt:
     empty_list: "Nenhum chat ainda."
     placeholder: "Mensagem…"
     send: "Enviar"
-    attach: "Anexar imagem"
+    attach: "Anexar imagens"
     image_prompt: "O que tem nesta imagem?"
-    bad_image: "Essa imagem não serve. JPEG, PNG, WebP ou HEIC, até 8 MB."
+    bad_image: "Essas imagens não servem. JPEG, PNG, WebP ou HEIC, até 8 MB cada, no máximo 4."
     web: "Web"
     web_hint: "Oferecer busca na web neste chat. O Grok ainda decide se busca."
     web_locked_on: "Web fica ligado neste chat para não quebrar o cache do prompt."
@@ -112,3 +112,7 @@ pt:
               blank: "não pode ficar em branco"
             password_confirmation:
               confirmation: "não confere com a senha"
+        message:
+          attributes:
+            images:
+              too_many: "demais (máximo de %{count})"

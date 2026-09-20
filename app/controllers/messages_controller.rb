@@ -18,7 +18,8 @@ class MessagesController < ApplicationController
         content: params[:content].to_s,
         web: web_for_new_message
       )
-      @user_message.image.attach(params[:image]) if params[:image].present?
+      files = Array(params[:images]).reject(&:blank?)
+      @user_message.images.attach(files) if files.present?
       @user_message.save!
       @assistant = @conversation.messages.create!(role: "assistant", status: "pending", content: "")
     end
@@ -32,7 +33,7 @@ class MessagesController < ApplicationController
   rescue ActiveRecord::RecordNotUnique
     redirect_to @conversation, alert: t("chat.in_flight")
   rescue ActiveRecord::RecordInvalid
-    alert = @user_message&.errors&.[](:image).present? ? t("chat.bad_image") : t("chat.blank")
+    alert = @user_message&.errors&.[](:images).present? ? t("chat.bad_image") : t("chat.blank")
     redirect_to @conversation, alert: alert
   end
 

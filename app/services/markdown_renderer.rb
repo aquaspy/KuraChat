@@ -15,6 +15,13 @@ class MarkdownRenderer
   GLUED_LIST = /\A(\#{1,6}\s+\S.*?\S)([-*+]\s+\S.*|\d{1,3}\.\s+\S.*)\s*\z/
   UNORDERED_ITEM = /\A\s*[-*+]\s+\S/
   ORDERED_ITEM = /\A\s*\d{1,3}\.\s+\S/
+  # Grok sometimes drops the newlines for a whole block, gluing the
+  # lead-in and every list item onto one line ("...embarque:- a)- b").
+  # One glued marker alone is ambiguous (a sloppy dash), so a split
+  # only happens when the SAME line holds 2+ markers glued to boundary
+  # punctuation: repetition confirms the collapsed list. Table rows
+  # and quotes stay untouched.
+  GLUED_MIDLINE_ITEM = /(?<=[:;.)\]!?])([-*+])(?=[ \t]+\S)/
   # Comrak emits an empty anchor inside every heading; drop it so
   # headings carry no dead fragment links.
   HEADING_ANCHOR = %r{<a href="#[^"]*"[^>]*></a>}
@@ -44,7 +51,7 @@ class MarkdownRenderer
     # (e.g. "Ranking1" -> "Ranking 1") would erase the glue evidence.
     safe, stash = ChatCompleter::RepetitionGuard.protect_code(markdown.to_s)
     fixed = ChatCompleter::RepetitionGuard.strip_junk(
-      unglue_heading_blocks(safe.gsub(HEADING_SPACE, '\1 \2'))
+      unglue_midline_lists(unglue_heading_blocks(safe.gsub(HEADING_SPACE, '\1 \2')))
     )
     html = Commonmarker.to_html(
       ChatCompleter::RepetitionGuard.restore_code(fixed, stash),
@@ -71,6 +78,18 @@ class MarkdownRenderer
     end.join
   end
   private_class_method :unglue_heading_blocks
+
+  def self.unglue_midline_lists(text)
+    text.lines.map do |line|
+      next line if line.include?("|") || line.match?(/\A\s*>/)
+
+      marker = line.scan(GLUED_MIDLINE_ITEM).flatten.tally.find { |_, n| n >= 2 }&.first
+      next line if marker.nil?
+
+      line.gsub(/(?<=[:;.)\]!?])#{Regexp.escape(marker)}(?=[ \t]+\S)/, "\n#{marker}")
+    end.join
+  end
+  private_class_method :unglue_midline_lists
 
   def self.list_confirmed?(glued, nxt)
     return false if nxt.nil?

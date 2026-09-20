@@ -25,7 +25,7 @@ It sits next to [KuraNotes](https://github.com/aquaspy/KuraNotes), [KuraHome](ht
 - Multi-user instance; each person owns many conversations
 - Streaming replies over Action Cable / Turbo Streams
 - Per-chat **Web** toggle (chosen on the first message, remembered in the browser for new chats)
-- Attach one image per message (Grok sees it; follow-ups keep seeing it while that turn is in context)
+- Attach up to 4 images per message (Grok sees them; follow-ups keep seeing them while that turn is in context)
 - Optional read-only share links (`/s/...`)
 - Automatic context compaction on very long threads (full transcript stays in SQLite)
 - Offline: reopen chats you already opened; sending stays disabled until you are back
