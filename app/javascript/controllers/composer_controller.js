@@ -1,12 +1,20 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["input", "submit", "file", "chip", "thumb"]
-  static values = { streaming: Boolean }
+  static targets = ["input", "submit", "file", "chips"]
+  static values = { streaming: Boolean, maxImages: Number, removeLabel: String }
+
+  // Field initializers run at construction: Stimulus fires value-changed
+  // callbacks (sync -> hasFile) before connect(), so this state must
+  // already exist. connect() still resets it on every reconnect.
+  sending = false
+  chosen = []
+  previewUrls = []
 
   connect() {
     this.sending = false
-    this.previewUrl = null
+    this.chosen = []
+    this.previewUrls = []
     this.sync()
     this.resize()
     this.tryFocus()
@@ -19,7 +27,7 @@ export default class extends Controller {
   disconnect() {
     window.removeEventListener("online", this.onOnline)
     window.removeEventListener("offline", this.onOnline)
-    this.revokePreview()
+    this.revokePreviews()
   }
 
   key(event) {
@@ -30,27 +38,38 @@ export default class extends Controller {
   }
 
   paste(event) {
-    const item = [...(event.clipboardData?.items || [])].find((entry) => entry.type.startsWith("image/"))
-    if (!item || !this.hasFileTarget) return
-
-    const file = item.getAsFile()
-    if (!file) return
+    if (!this.hasFileTarget) return
+    const files = [...(event.clipboardData?.items || [])]
+      .filter((entry) => entry.type.startsWith("image/"))
+      .map((entry) => entry.getAsFile())
+      .filter(Boolean)
+    if (files.length === 0) return
 
     event.preventDefault()
-    const transfer = new DataTransfer()
-    transfer.items.add(file)
-    this.fileTarget.files = transfer.files
-    this.picked()
+    this.addFiles(files)
   }
 
   picked() {
-    this.showChip()
+    if (!this.hasFileTarget) return
+    // A dialog pick replaces the input, so merge it into the kept files.
+    const fresh = [...this.fileTarget.files]
+    this.fileTarget.value = ""
+    this.addFiles(fresh)
+  }
+
+  removeImage(event) {
+    const index = Number(event.params?.index)
+    if (!Number.isInteger(index)) return
+    this.chosen.splice(index, 1)
+    this.writeFiles()
+    this.renderChips()
     this.sync()
   }
 
   clearImage() {
-    if (this.hasFileTarget) this.fileTarget.value = ""
-    this.hideChip()
+    this.chosen = []
+    this.writeFiles()
+    this.renderChips()
     this.sync()
   }
 
@@ -65,9 +84,8 @@ export default class extends Controller {
     this.draft = this.inputTarget.value
     this.sending = true
     this.sync()
-    const file = this.hasFileTarget ? this.fileTarget.files?.[0] : null
-    const preview = file ? URL.createObjectURL(file) : null
-    this.echo(this.draft, preview)
+    const previews = this.chosen.map((file) => URL.createObjectURL(file))
+    this.echo(this.draft, previews)
     this.inputTarget.value = ""
     this.inputTarget.style.height = ""
     this.clearImage()
@@ -94,8 +112,8 @@ export default class extends Controller {
   }
 
   sync() {
-    if (this.hasInputTarget) this.inputTarget.disabled = this.streamingValue || !navigator.onLine
-    if (this.hasFileTarget) this.fileTarget.disabled = this.streamingValue || !navigator.onLine
+    if (this.hasInputTarget) this.inputTarget.disabled = this.streamingValue
+    if (this.hasFileTarget) this.fileTarget.disabled = this.streamingValue
     if (this.hasSubmitTarget) this.submitTarget.disabled = this.blocked()
   }
 
@@ -109,11 +127,11 @@ export default class extends Controller {
   }
 
   hasFile() {
-    return this.hasFileTarget && this.fileTarget.files?.length > 0
+    return this.chosen.length > 0
   }
 
   tryFocus() {
-    if (!this.hasInputTarget || this.sending || this.streamingValue || !navigator.onLine) return
+    if (!this.hasInputTarget || this.sending || this.streamingValue) return
     if (!this.inputTarget.hasAttribute("autofocus")) return
     this.inputTarget.focus({ preventScroll: true })
   }
@@ -122,10 +140,26 @@ export default class extends Controller {
     return window.matchMedia("(max-width: 860px)").matches
   }
 
-  echo(text, imageUrl) {
+  addFiles(files) {
+    const max = this.maxImagesValue > 0 ? this.maxImagesValue : 4
+    this.chosen = [...this.chosen, ...files].slice(0, max)
+    this.writeFiles()
+    this.renderChips()
+    this.sync()
+  }
+
+  writeFiles() {
+    if (!this.hasFileTarget) return
+    const transfer = new DataTransfer()
+    this.chosen.forEach((file) => transfer.items.add(file))
+    this.fileTarget.files = transfer.files
+  }
+
+  echo(text, imageUrls) {
     const transcript = document.getElementById("transcript")
     const value = text == null ? "" : text.toString()
-    if (!transcript || (!value.trim() && !imageUrl)) return
+    const urls = imageUrls.filter(Boolean)
+    if (!transcript || (!value.trim() && urls.length === 0)) return
     let node = document.getElementById("msg-echo")
     if (!node) {
       node = document.createElement("article")
@@ -134,15 +168,15 @@ export default class extends Controller {
       transcript.appendChild(node)
     }
     node.replaceChildren()
-    if (imageUrl) {
+    urls.forEach((url) => {
       const wrap = document.createElement("div")
       wrap.className = "msg-image"
       const img = document.createElement("img")
-      img.src = imageUrl
+      img.src = url
       img.alt = ""
       wrap.appendChild(img)
       node.appendChild(wrap)
-    }
+    })
     if (value.trim()) {
       const body = document.createElement("div")
       body.className = "msg-body"
@@ -156,23 +190,33 @@ export default class extends Controller {
     document.getElementById("msg-echo")?.remove()
   }
 
-  showChip() {
-    const file = this.hasFileTarget ? this.fileTarget.files?.[0] : null
-    if (!file || !this.hasChipTarget || !this.hasThumbTarget) return
-    this.revokePreview()
-    this.previewUrl = URL.createObjectURL(file)
-    this.thumbTarget.src = this.previewUrl
-    this.chipTarget.hidden = false
+  renderChips() {
+    if (!this.hasChipsTarget) return
+    this.revokePreviews()
+    this.chipsTarget.replaceChildren()
+    this.chosen.forEach((file, index) => {
+      const url = URL.createObjectURL(file)
+      this.previewUrls.push(url)
+      const chip = document.createElement("div")
+      chip.className = "composer-chip"
+      const img = document.createElement("img")
+      img.alt = ""
+      img.src = url
+      const remove = document.createElement("button")
+      remove.type = "button"
+      remove.className = "composer-chip-x"
+      remove.textContent = "×"
+      remove.dataset.action = "composer#removeImage"
+      remove.dataset.composerIndexParam = String(index)
+      if (this.hasRemoveLabelValue) remove.setAttribute("aria-label", this.removeLabelValue)
+      chip.append(img, remove)
+      this.chipsTarget.appendChild(chip)
+    })
+    this.chipsTarget.hidden = this.chosen.length === 0
   }
 
-  hideChip() {
-    this.revokePreview()
-    if (this.hasThumbTarget) this.thumbTarget.removeAttribute("src")
-    if (this.hasChipTarget) this.chipTarget.hidden = true
-  }
-
-  revokePreview() {
-    if (this.previewUrl) URL.revokeObjectURL(this.previewUrl)
-    this.previewUrl = null
+  revokePreviews() {
+    this.previewUrls.forEach((url) => URL.revokeObjectURL(url))
+    this.previewUrls = []
   }
 }

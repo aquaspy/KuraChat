@@ -29,6 +29,7 @@ ARM_SETS = {
         {"id": "grok420n", "kind": "xai", "model": "grok-4.20-0309-non-reasoning"},
         {"id": "grok45", "kind": "xai", "model": "grok-4.5"},
         {"id": "grok46", "kind": "xai", "model": "grok-4.6"},
+        {"id": "grok47", "kind": "xai", "model": "grok-4.7"},
     ],
     "or": [
         {"id": "ds41f", "kind": "or", "model": "deepseek/deepseek-v4.1-flash"},

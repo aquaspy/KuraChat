@@ -5,19 +5,22 @@ class Message < ApplicationRecord
   STATUSES = %w[pending streaming complete failed].freeze
   IMAGE_TYPES = %w[image/jpeg image/png image/webp image/heic image/heif image/gif].freeze
   IMAGE_MAX_BYTES = 8.megabytes
+  MAX_IMAGES = 4
   IMAGE_TOKENS = 2_000
   MODEL_VARIANT = { resize_to_limit: [ 1568, 1568 ], format: :jpeg, saver: { quality: 85 } }.freeze
 
   belongs_to :conversation, touch: true
-  has_one_attached :image, dependent: false
+  has_many_attached :images, dependent: false
   attribute :web, :boolean, default: false
 
-  before_destroy :purge_image
+  # Prepend: must run before the dependent: :destroy underneath
+  # has_many_attached, which deletes attachment rows without blobs.
+  before_destroy :purge_images, prepend: true
 
   validates :role, inclusion: { in: ROLES }
   validates :content, length: { maximum: 16_384 }, if: -> { role == "user" }
   validate :user_content_present
-  validate :acceptable_image
+  validate :acceptable_images
 
   scope :chronological, -> { order(:id) }
   scope :transcript, -> {
@@ -72,55 +75,56 @@ class Message < ApplicationRecord
         cost += token_bytes(item.to_json)
       end
     end
-    cost += IMAGE_TOKENS if role == "user" && image.attached?
+    cost += IMAGE_TOKENS * images.size if role == "user" && images.attached?
     cost += token_bytes(user_text_for_model) if role == "user"
     cost += token_bytes(content.to_s) if role == "assistant"
     cost
   end
 
   private
-    def purge_image
-      image.purge if image.attached?
+    def purge_images
+      images.each(&:purge) if images.attached?
     end
 
     def user_content_present
       return unless role == "user"
-      return if image.attached?
+      return if images.attached?
 
       errors.add(:content, :blank) if content.to_s.strip.blank?
     end
 
-    def acceptable_image
-      return unless image.attached?
+    def acceptable_images
+      return unless images.attached?
 
-      errors.add(:image, :invalid) unless image.content_type.in?(IMAGE_TYPES)
-      errors.add(:image, :invalid) if image.byte_size > IMAGE_MAX_BYTES
+      errors.add(:images, :too_many, count: MAX_IMAGES) if images.size > MAX_IMAGES
+      images.each do |image|
+        errors.add(:images, :invalid) unless image.content_type.in?(IMAGE_TYPES)
+        errors.add(:images, :invalid) if image.byte_size > IMAGE_MAX_BYTES
+      end
     end
 
     def input_content
       return content if content.is_a?(Array)
-      return content.to_s unless role == "user" && image.attached?
+      return content.to_s unless role == "user" && images.attached?
 
-      uri = image_data_uri
-      return content.to_s if uri.blank?
+      parts = images.filter_map { |image|
+        uri = image_data_uri(image)
+        uri.present? ? { type: "input_image", image_url: uri, detail: "high" } : nil
+      }
+      return content.to_s if parts.empty?
 
-      [
-        { type: "input_image", image_url: uri, detail: "high" },
-        { type: "input_text", text: user_text_for_model }
-      ]
+      parts << { type: "input_text", text: user_text_for_model }
     end
 
     def user_text_for_model
       text = content.to_s.strip
       return text if text.present?
-      return I18n.t("chat.image_prompt") if image.attached?
+      return I18n.t("chat.image_prompt") if images.attached?
 
       text
     end
 
-    def image_data_uri
-      return nil unless image.attached?
-
+    def image_data_uri(image)
       begin
         bytes = image.variant(MODEL_VARIANT).processed.download
         "data:image/jpeg;base64,#{Base64.strict_encode64(bytes)}"

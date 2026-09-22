@@ -44,7 +44,7 @@ class ChatCompleter
       # with no_inline_citations and leaves the two sides glued. The URL may
       # itself contain parens (e.g. wiki links), so match one nesting level.
       cleaned = cleaned.gsub(/\[\[[0-9]+\]\](?:\((?:[^()]|\([^()]*\))*\))?/, " ")
-      cleaned = cleaned.gsub(/(\*\*[^*]+\*\*)(\p{L})/, '\1 \2')
+      cleaned = cleaned.gsub(/(\*\*[^*]+\*\*)([\p{L}\d])/, '\1 \2')
       # Unstick glued sentences, but a period only splits before a capital —
       # bare domains, filenames and abbreviations (example.com, file.txt,
       # e.g.) stay intact. ! and ? rarely sit inside words.

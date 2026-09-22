@@ -42,15 +42,18 @@ class ShareFlowTest < ActionDispatch::IntegrationTest
 
   test "shared chat shows attached images" do
     pic = @chat.messages.create!(role: "user", content: "Look")
-    pic.image.attach(
-      io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"),
-      filename: "dot.png",
-      content_type: "image/png"
-    )
+    2.times do
+      pic.images.attach(
+        io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"),
+        filename: "dot.png",
+        content_type: "image/png"
+      )
+    end
     @chat.generate_share_token!
     get shared_conversation_path(@chat.share_token)
     assert_response :success
     assert_includes @response.body, "msg-image"
+    assert_equal 2, @response.body.scan('class="msg-image"').size
     assert_match(/<img/i, @response.body)
   end
 end

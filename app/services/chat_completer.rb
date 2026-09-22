@@ -171,7 +171,7 @@ class ChatCompleter
       older = costs[0...cut_index].map(&:first)
       excerpt = older.filter_map { |message|
         label = message.content.to_s
-        label = "[image]" if label.blank? && message.image.attached?
+        label = "[image]" if label.blank? && message.images.attached?
         next if label.blank?
 
         "#{message.role}: #{label.truncate(500)}"

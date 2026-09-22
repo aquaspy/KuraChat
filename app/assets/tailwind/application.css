@@ -612,8 +612,16 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
 }
 .msg-user.is-echo { opacity: 0.88; }
 .msg-user.is-echo .msg-body { white-space: pre-wrap; }
+.msg-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+  gap: 0.45rem;
+  margin: 0 0 0.45rem;
+}
+.msg-images:last-child { margin-bottom: 0; }
 .msg-image { margin: 0 0 0.45rem; }
 .msg-image:last-child { margin-bottom: 0; }
+.msg-images .msg-image { margin: 0; }
 .msg-image a { display: block; }
 .msg-image img {
   display: block;
@@ -780,6 +788,12 @@ input:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transp
   flex-direction: column;
   gap: 0.35rem;
 }
+.composer-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.composer-chips[hidden] { display: none; }
 .composer-chip {
   display: flex;
   align-items: center;

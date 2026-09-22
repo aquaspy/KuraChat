@@ -22,12 +22,10 @@ module ApplicationHelper
     conversation.api_cost_billed? ? "chat.cost" : "chat.cost_est"
   end
 
-  def message_image_tag(message)
-    return unless message.image.attached?
-
-    thumb = message.image.variant(resize_to_limit: [ 720, 720 ]).processed
+  def message_image_tag(image)
+    thumb = image.variant(resize_to_limit: [ 720, 720 ]).processed
     image_tag thumb, alt: ""
   rescue StandardError
-    image_tag message.image, alt: ""
+    image_tag image, alt: ""
   end
 end

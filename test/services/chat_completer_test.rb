@@ -255,19 +255,23 @@ class ChatCompleterTest < ActiveSupport::TestCase
 
   test "window embeds attached images without costing the data-uri size" do
     user = @chat.messages.create!(role: "user", content: "Look")
-    user.image.attach(
-      io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"),
-      filename: "dot.png",
-      content_type: "image/png"
-    )
+    2.times do
+      user.images.attach(
+        io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"),
+        filename: "dot.png",
+        content_type: "image/png"
+      )
+    end
     current = @chat.messages.create!(role: "assistant", status: "pending", content: "")
     payload = ChatCompleter.new(current).windowed_messages
     user_msg = payload.find { |m| m[:role] == "user" }
     parts = user_msg[:content]
     assert parts.is_a?(Array)
-    assert parts.any? { |part| part[:type] == "input_image" && part[:image_url].to_s.start_with?("data:image/") }
-    assert_operator user.input_cost, :<, 5_000
-    assert_operator user.input_cost, :>=, Message::IMAGE_TOKENS
+    embedded = parts.select { |part| part[:type] == "input_image" }
+    assert_equal 2, embedded.size
+    assert embedded.all? { |part| part[:image_url].to_s.start_with?("data:image/") }
+    assert_operator user.input_cost, :<, 10_000
+    assert_operator user.input_cost, :>=, Message::IMAGE_TOKENS * 2
   end
 
   test "historical kagi tool rows are omitted from the model window" do

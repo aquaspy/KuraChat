@@ -157,4 +157,37 @@ class MarkdownRendererTest < ActiveSupport::TestCase
     assert_includes html, "<h3>Prós - contras</h3>"
     assert_includes html, "<li>item</li>"
   end
+
+  test "bold glued to a digit still renders" do
+    html = MarkdownRenderer.render("**Quantos lounges principais tem?**4 lounges de embarque:")
+    assert_includes html, "<strong>Quantos lounges principais tem?</strong>"
+    assert_includes html, "4 lounges"
+    assert_not_includes html, "**Quantos"
+  end
+
+  test "splits list items glued onto one line" do
+    md = "**Quantos lounges principais tem?**4 lounges de embarque:" \
+      "- Lounge 1 (Schengen)- Lounge 2 (não-Schengen, perto de D/E)" \
+      "- Lounge 3 (não-Schengen, perto de F/G)- Lounge 4O Mc Donald's está no 2 e no 3."
+    html = MarkdownRenderer.render(md)
+    assert_includes html, "<strong>Quantos lounges principais tem?</strong>"
+    assert_includes html, "<ul>"
+    assert_includes html, "<li>Lounge 1 (Schengen)</li>"
+    assert_includes html, "<li>Lounge 2 (não-Schengen, perto de D/E)</li>"
+    assert_includes html, "<li>Lounge 3 (não-Schengen, perto de F/G)</li>"
+    assert_equal 4, html.scan("<li>").size
+  end
+
+  test "leaves single mid-line dashes and emphasis in prose alone" do
+    html = MarkdownRenderer.render("Ele disse- vai embora. Prós - contras ficam. Área *airside* (após) e *x* (y).")
+    assert_not_includes html, "<ul>"
+    assert_includes html, "<em>airside</em>"
+  end
+
+  test "mid-line unglue skips table rows and code" do
+    html = MarkdownRenderer.render("| (a)- x | (b)- y |\n|:---|:---|\n| 1 | 2 |\n")
+    assert_includes html, "<table>"
+    code = MarkdownRenderer.render("```\nx:- a (c)- b\n```\n")
+    assert_includes code, "x:- a (c)- b"
+  end
 end

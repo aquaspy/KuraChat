@@ -154,19 +154,41 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     chat = @user.conversations.create!
     file = fixture_file_upload("dot.png", "image/png")
     assert_enqueued_with(job: CompleteChatJob) do
-      post conversation_messages_path(chat), params: { content: "", image: file }
+      post conversation_messages_path(chat), params: { content: "", images: [ file ] }
     end
     user = chat.messages.find_by!(role: "user")
-    assert user.image.attached?
+    assert user.images.attached?
     assert_equal "pending", chat.messages.where(role: "assistant").last.status
+  end
+
+  test "posting four images enqueues completion with all attached" do
+    chat = @user.conversations.create!
+    files = 4.times.map { fixture_file_upload("dot.png", "image/png") }
+    assert_enqueued_with(job: CompleteChatJob) do
+      post conversation_messages_path(chat), params: { content: "Compare", images: files }
+    end
+    user = chat.messages.find_by!(role: "user")
+    assert_equal 4, user.images.size
+  end
+
+  test "posting a fifth image is rejected" do
+    chat = @user.conversations.create!
+    files = 5.times.map { fixture_file_upload("dot.png", "image/png") }
+    assert_no_enqueued_jobs only: CompleteChatJob do
+      post conversation_messages_path(chat), params: { content: "Too many", images: files }
+    end
+    assert_redirected_to conversation_path(chat)
+    follow_redirect!
+    assert_match(/can't be used|não servem/i, flash[:alert].to_s + @response.body)
+    assert_equal 0, chat.messages.count
   end
 
   test "delete all purges images and only the current users chats" do
     keep = @other.conversations.create!(title: "Theirs")
     mine = @user.conversations.create!(title: "Mine")
     pic = mine.messages.create!(role: "user", content: "secret")
-    pic.image.attach(io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"), filename: "dot.png", content_type: "image/png")
-    path = pic.image.blob.service.path_for(pic.image.blob.key)
+    pic.images.attach(io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"), filename: "dot.png", content_type: "image/png")
+    path = pic.images.first.blob.service.path_for(pic.images.first.blob.key)
     assert File.exist?(path)
 
     delete destroy_all_conversations_path
@@ -216,6 +238,21 @@ class ChatFlowTest < ActionDispatch::IntegrationTest
     get conversation_path(chat)
     assert_response :success
     assert_includes @response.body, %(input-&gt;composer#resize input-&gt;composer#sync)
+  end
+
+  test "composer stays editable while offline and only the send stays blocked" do
+    source = Rails.root.join("app/javascript/controllers/composer_controller.js").read
+
+    input_line = source.lines.find { |line| line.include?("inputTarget.disabled") }
+    file_line = source.lines.find { |line| line.include?("fileTarget.disabled") }
+    assert_not_includes input_line.to_s, "onLine", "textarea must stay editable while offline"
+    assert_not_includes file_line.to_s, "onLine", "attachment must stay usable while offline"
+
+    focus = source[/tryFocus\(\) \{.*?\}/m].to_s
+    assert_not_includes focus, "onLine", "composer may still autofocus while offline so a draft can be typed"
+
+    blocked = source[/blocked\(\) \{.*?\}/m].to_s
+    assert_includes blocked, "navigator.onLine", "send must stay blocked while offline"
   end
 
   test "title field auto-saves while typing" do

@@ -53,9 +53,9 @@ en:
     empty_list: "No chats yet."
     placeholder: "Message…"
     send: "Send"
-    attach: "Attach image"
+    attach: "Attach images"
     image_prompt: "What's in this image?"
-    bad_image: "That image can't be used. JPEG, PNG, WebP or HEIC, up to 8 MB."
+    bad_image: "Those images can't be used. JPEG, PNG, WebP or HEIC, up to 8 MB each, max 4."
     web: "Web"
     web_hint: "Offer web search for this chat. Grok still decides whether to search."
     web_locked_on: "Web stays on for this chat so the prompt cache is not broken."
@@ -98,3 +98,10 @@ en:
     theme_dark: "Theme: dark"
     theme_switch: "click to switch"
     copied: "Copied"
+  activerecord:
+    errors:
+      models:
+        message:
+          attributes:
+            images:
+              too_many: "too many (maximum %{count})"

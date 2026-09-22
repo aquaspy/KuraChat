@@ -84,26 +84,54 @@ class MessageTest < ActiveSupport::TestCase
 
   test "rejects a non-image attachment" do
     msg = @chat.messages.new(role: "user", content: "Hi")
-    msg.image.attach(io: StringIO.new("not an image"), filename: "x.txt", content_type: "text/plain")
+    msg.images.attach(io: StringIO.new("not an image"), filename: "x.txt", content_type: "text/plain")
     assert_not msg.valid?
-    assert msg.errors[:image].any?
+    assert msg.errors[:images].any?
+  end
+
+  test "embeds up to four images and rejects a fifth" do
+    msg = @chat.messages.new(role: "user", content: "Compare")
+    4.times { attach_dot(msg) }
+    assert msg.valid?, msg.errors.full_messages.to_sentence
+    msg.save!
+    parts = msg.as_input.sole[:content].select { |part| part[:type] == "input_image" }
+    assert_equal 4, parts.size
+    assert parts.all? { |part| part[:image_url].start_with?("data:image/") }
+
+    msg.images.attach(
+      io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"),
+      filename: "fifth.png",
+      content_type: "image/png"
+    )
+    assert_not msg.valid?
+    assert msg.errors[:images].any?
+  end
+
+  test "image cost scales with the attachment count" do
+    plain = @chat.messages.create!(role: "user", content: "Hi")
+    msg = @chat.messages.new(role: "user", content: "Hi")
+    3.times { attach_dot(msg) }
+    msg.save!
+    assert_equal plain.input_cost + Message::IMAGE_TOKENS * 3, msg.input_cost
   end
 
   test "deleting a conversation purges attached images from disk" do
     msg = @chat.messages.create!(role: "user", content: "pic")
     attach_dot(msg)
+    attach_dot(msg)
     msg.save!
-    blob_id = msg.image.blob.id
-    path = blob_path(msg.image.blob)
-    assert File.exist?(path)
+    ids_paths = msg.images.map { |image| [ image.blob.id, blob_path(image.blob) ] }
+    assert ids_paths.all? { |_, path| File.exist?(path) }
     @chat.destroy
-    assert_not File.exist?(path)
-    assert_not ActiveStorage::Blob.exists?(blob_id)
+    ids_paths.each do |blob_id, path|
+      assert_not File.exist?(path)
+      assert_not ActiveStorage::Blob.exists?(blob_id)
+    end
   end
 
   private
     def attach_dot(message)
-      message.image.attach(
+      message.images.attach(
         io: File.open(Rails.root.join("test/fixtures/files/dot.png"), "rb"),
         filename: "dot.png",
         content_type: "image/png"
