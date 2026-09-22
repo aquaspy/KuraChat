@@ -17,7 +17,7 @@ medium effort on web turns):
 
 - `grok-build-0.1`, `grok-4.3`, `grok-4.20-0309-reasoning`,
   `grok-4.20-multi-agent-0309`, `grok-4.20-0309-non-reasoning`,
-  `grok-4.5`, `grok-4.6`
+  `grok-4.5`, `grok-4.6`, `grok-4.7`
 
 16 scenarios: 3 web-search (incl. a greeting-with-search-on skip check),
 3 reasoning, 3 writing (one in PT), 2 code, 2 explainers, 1 vision turn,
