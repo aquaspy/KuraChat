@@ -136,6 +136,8 @@ func escapeLike(s string) string {
 
 // OpenDraftFor returns the newest blank draft (no title, no share, no
 // messages), creating one when missing, and deletes the other blanks.
+// New drafts inherit the voice toggles and effort of the user's most
+// recent chat, so flipping them once sticks for future chats.
 func (s *Store) OpenDraftFor(userID int64) (*Conversation, error) {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -149,8 +151,14 @@ func (s *Store) OpenDraftFor(userID int64) (*Conversation, error) {
 		ORDER BY c.updated_at DESC, c.id DESC LIMIT 1`, userID).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		ts := now()
-		res, err := tx.Exec(`INSERT INTO conversations (user_id, title, created_at, updated_at)
-			VALUES (?, '', ?, ?)`, userID, ts, ts)
+		readAloud, autoSend, effort := 0, 1, ""
+		_ = tx.QueryRow(`SELECT voice_read_aloud, voice_auto_send, effort
+			FROM conversations WHERE user_id = ?
+			ORDER BY updated_at DESC, id DESC LIMIT 1`, userID).
+			Scan(&readAloud, &autoSend, &effort)
+		res, err := tx.Exec(`INSERT INTO conversations
+			(user_id, title, voice_read_aloud, voice_auto_send, effort, created_at, updated_at)
+			VALUES (?, '', ?, ?, ?, ?, ?)`, userID, readAloud, autoSend, effort, ts, ts)
 		if err != nil {
 			return nil, err
 		}

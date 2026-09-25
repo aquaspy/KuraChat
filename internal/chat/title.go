@@ -86,7 +86,7 @@ func (s *Service) maybeCompact(conv *store.Conversation, assistant *store.Messag
 			costs = append(costs, costed{m, c})
 		}
 	}
-	prefixJSON := mustJSON(s.prefixMessages(conv, locale, false))
+	prefixJSON := mustJSON(s.prefixMessages(conv, locale))
 	total := tokenEstimate(prefixJSON)
 	for _, c := range costs {
 		total += c.cost

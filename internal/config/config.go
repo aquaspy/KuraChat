@@ -154,9 +154,9 @@ func defaultModels() []string {
 	return []string{
 		"openai/gpt-6-luna",
 		"deepseek/deepseek-v4.1-flash",
-		"qwen/qwen3.8-flash",
+		"anthropic/claude-opus-5.5",
 		"meta/muse-glimmer-30b",
-		"x-ai/grok-4.3",
+		"x-ai/grok-4.7",
 	}
 }
 

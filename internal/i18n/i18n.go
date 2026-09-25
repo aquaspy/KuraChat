@@ -178,12 +178,9 @@ var strings_ = map[Locale]map[string]string{
 		"chat.searched_deep":      "deep",
 		"chat.system_prompt": "You are KuraChat, a private assistant on the user's server.\n" +
 			"Be clear and useful. Short answers for simple questions; thorough for research, comparisons, numbers, or current facts.\n" +
-			"You cannot browse the web. Do not claim you searched.\n" +
 			"Reply in the user's language unless they write in another.\n",
-		"chat.system_prompt_search": "You are KuraChat, a private assistant on the user's server.\n" +
-			"Be clear and useful. Short answers for simple questions; thorough for research, comparisons, numbers, or current facts.\n" +
-			"This turn includes fresh web search results. Ground current facts in them and cite sources with markdown links. Do not claim browsing beyond the provided results.\n" +
-			"Reply in the user's language unless they write in another.\n",
+		"chat.system_note_plain":  "You cannot browse the web. Do not claim you searched.",
+		"chat.system_note_search": "This turn includes fresh web search results. Ground current facts in them and cite sources with markdown links. Do not claim browsing beyond the provided results.",
 
 		"js.invalid_credentials": "Invalid email or password.",
 		"js.wrong_password":      "Wrong password.",
@@ -308,12 +305,9 @@ var strings_ = map[Locale]map[string]string{
 		"chat.cost_hint_est":      "Alguns turnos não têm o total faturado da API, então esta soma está incompleta.",
 		"chat.system_prompt": "Você é o KuraChat, um assistente privado no servidor do usuário.\n" +
 			"Seja claro e útil. Respostas curtas para perguntas simples; completo em pesquisa, comparações, números ou fatos atuais.\n" +
-			"Você não navega na web. Não diga que buscou.\n" +
 			"Responda no idioma do usuário, a menos que ele escreva em outro.\n",
-		"chat.system_prompt_search": "Você é o KuraChat, um assistente privado no servidor do usuário.\n" +
-			"Seja claro e útil. Respostas curtas para perguntas simples; completo em pesquisa, comparações, números ou fatos atuais.\n" +
-			"Este turno inclui resultados frescos de busca na web. Baseie fatos atuais neles e cite as fontes com links markdown. Não diga que navegou além dos resultados fornecidos.\n" +
-			"Responda no idioma do usuário, a menos que ele escreva em outro.\n",
+		"chat.system_note_plain":  "Você não navega na web. Não diga que buscou.",
+		"chat.system_note_search": "Este turno inclui resultados frescos de busca na web. Baseie fatos atuais neles e cite as fontes com links markdown. Não diga que navegou além dos resultados fornecidos.",
 
 		"js.invalid_credentials": "Email ou senha inválidos.",
 		"js.wrong_password":      "Senha incorreta.",

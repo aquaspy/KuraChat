@@ -279,3 +279,33 @@ func TestAddUsageCost(t *testing.T) {
 		t.Fatalf("usage = %v", usage)
 	}
 }
+
+func TestOpenDraftForInheritsVoiceAndEffort(t *testing.T) {
+	s := openTest(t)
+	u := mustUser(t, s, "a@x.com")
+	d1, err := s.OpenDraftFor(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d1.VoiceReadAloud || !d1.VoiceAutoSend || d1.Effort != "" {
+		t.Fatalf("first draft = %+v, want schema defaults", d1)
+	}
+	if err := s.UpdateConversationSettings(u.ID, d1.ID, ConversationSettings{
+		VoiceReadAloud: true, VoiceAutoSend: false, Effort: "low",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateUserMessage(d1.ID, "hi", false, false); err != nil {
+		t.Fatal(err)
+	}
+	d2, err := s.OpenDraftFor(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d2.ID == d1.ID {
+		t.Fatal("expected a new draft after the old one gained a message")
+	}
+	if !d2.VoiceReadAloud || d2.VoiceAutoSend || d2.Effort != "low" {
+		t.Fatalf("new draft = %+v, want voice+effort inherited", d2)
+	}
+}

@@ -32,9 +32,11 @@ func (s *Service) windowedMessages(conv *store.Conversation, assistant *store.Me
 	if s.rowsHaveImages(rows) {
 		vision = s.supportsImage(s.resolveModel(conv))
 	}
-	prefix := s.prefixMessages(conv, locale, search)
+	prefix := s.prefixMessages(conv, locale)
+	suffix := []any{s.turnNote(locale, search)}
 	prefixJSON, _ := json.Marshal(prefix)
-	est := tokenEstimate(string(prefixJSON))
+	suffixJSON, _ := json.Marshal(suffix)
+	est := tokenEstimate(string(prefixJSON)) + tokenEstimate(string(suffixJSON))
 	var picked []any
 	hasPDF := false
 	dropped := 0
@@ -54,9 +56,9 @@ func (s *Service) windowedMessages(conv *store.Conversation, assistant *store.Me
 	if dropped > 0 {
 		// Unbudgeted (~60 tokens): the notice only exists because the
 		// loop above dropped images for a text-only model.
-		prefix = append(prefix, s.visionNotice(locale, dropped))
+		suffix = append(suffix, s.visionNotice(locale, dropped))
 	}
-	return append(prefix, picked...), hasPDF, nil
+	return append(append(prefix, picked...), suffix...), hasPDF, nil
 }
 
 // rowsHaveImages peeks for attached images so the capability lookup only
@@ -90,25 +92,36 @@ func (s *Service) visionNotice(locale i18n.Locale, dropped int) any {
 	}
 }
 
-func (s *Service) prefixMessages(conv *store.Conversation, locale i18n.Locale, search bool) []any {
+// prefixMessages builds the stable head of the model input: base prompt,
+// date, and rolling summary. It never varies with per-turn flags, so the
+// cached prefix survives web-search toggles; conditional notes ride at
+// the end instead (turnNote, visionNotice).
+func (s *Service) prefixMessages(conv *store.Conversation, locale i18n.Locale) []any {
 	loc, err := time.LoadLocation("America/Sao_Paulo")
 	if err != nil {
 		loc = time.UTC
 	}
 	now := time.Now().In(loc)
 	date := "Current date: " + now.Format("2006-01-02 Monday") + " (America/Sao_Paulo)."
-	key := "chat.system_prompt"
-	if search {
-		key = "chat.system_prompt_search"
-	}
 	out := []any{
-		map[string]any{"role": "system", "content": i18n.T(locale, key)},
+		map[string]any{"role": "system", "content": i18n.T(locale, "chat.system_prompt")},
 		map[string]any{"role": "system", "content": date},
 	}
 	if strings.TrimSpace(conv.Summary) != "" {
 		out = append(out, map[string]any{"role": "system", "content": "Earlier conversation summary:\n" + conv.Summary})
 	}
 	return out
+}
+
+// turnNote carries the per-turn browse/search instruction. It lives after
+// the newest user message so toggling web search rewrites the tail only,
+// never the cached prefix.
+func (s *Service) turnNote(locale i18n.Locale, search bool) any {
+	key := "chat.system_note_plain"
+	if search {
+		key = "chat.system_note_search"
+	}
+	return map[string]any{"role": "system", "content": i18n.T(locale, key)}
 }
 
 func tokenEstimate(s string) int {

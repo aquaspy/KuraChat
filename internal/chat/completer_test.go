@@ -29,6 +29,7 @@ type streamCall struct {
 	search  *openrouter.SearchOptions
 	files   *openrouter.FileOptions
 	sys0    string
+	tail    string
 }
 
 type fakeLLM struct {
@@ -45,13 +46,16 @@ type fakeLLM struct {
 }
 
 func (f *fakeLLM) StreamChat(_ context.Context, input []any, max *int, effort, session string, search *openrouter.SearchOptions, files *openrouter.FileOptions, yield func(map[string]any) error) error {
-	sys0 := ""
+	sys0, tail := "", ""
 	if len(input) > 0 {
 		if m, _ := input[0].(map[string]any); m != nil {
 			sys0, _ = m["content"].(string)
 		}
+		if m, _ := input[len(input)-1].(map[string]any); m != nil {
+			tail, _ = m["content"].(string)
+		}
 	}
-	f.streams = append(f.streams, streamCall{effort, max, session, len(input), search, files, sys0})
+	f.streams = append(f.streams, streamCall{effort, max, session, len(input), search, files, sys0, tail})
 	events := f.events
 	if f.failFirst > 0 {
 		f.failFirst--
@@ -446,7 +450,7 @@ func TestToolRowsOmittedFromWindow(t *testing.T) {
 	asst, _ := st.CreateAssistantMessage(conv.ID)
 	fx := &fakeLLM{events: textEvents("Yo"), title: "T"}
 	testService(t, st, fx).Run(asst.ID, i18n.EN)
-	if fx.streams[0].nInput != 2 { // persona + turn context only
+	if fx.streams[0].nInput != 3 { // persona + date + trailing turn note only
 		t.Fatalf("input rows = %d", fx.streams[0].nInput)
 	}
 }
@@ -536,8 +540,11 @@ func TestSearchTurn(t *testing.T) {
 	if got.Engine != "exa" || got.Mode != "auto" || got.MaxResults != 5 {
 		t.Fatalf("search = %+v", got)
 	}
-	if !strings.Contains(fx.streams[0].sys0, "fresh web search results") {
-		t.Fatalf("sys0 = %q", fx.streams[0].sys0)
+	if !strings.Contains(fx.streams[0].tail, "fresh web search results") {
+		t.Fatalf("tail = %q", fx.streams[0].tail)
+	}
+	if strings.Contains(fx.streams[0].sys0, "fresh web search results") {
+		t.Fatalf("sys0 must stay toggle-free, got %q", fx.streams[0].sys0)
 	}
 	done, _ := st.GetMessage(asst.ID)
 	if done.Citations != `[{"title":"News A","url":"https://n.test/a"}]` {
@@ -692,8 +699,8 @@ func TestSearchOffWithoutWebFlag(t *testing.T) {
 	if len(fx.streams) != 1 || fx.streams[0].search != nil {
 		t.Fatalf("streams = %+v", fx.streams)
 	}
-	if !strings.Contains(fx.streams[0].sys0, "cannot browse") {
-		t.Fatalf("sys0 = %q", fx.streams[0].sys0)
+	if !strings.Contains(fx.streams[0].tail, "cannot browse") {
+		t.Fatalf("tail = %q", fx.streams[0].tail)
 	}
 	done, _ := st.GetMessage(asst.ID)
 	if done.Citations != "" {
