@@ -52,13 +52,13 @@ func runServe(cfg config.Config) error {
 	// Boot sweep: completions orphaned by a restart fail fast, and dead
 	// sessions are collected. The ticker repeats both every 5 minutes.
 	svc.SweepStale()
-	_ = st.DeleteStaleSessions(30 * 24 * time.Hour)
+	_ = st.DeleteStaleSessions(store.SessionMaxAge)
 	go func() {
 		t := time.NewTicker(5 * time.Minute)
 		defer t.Stop()
 		for range t.C {
 			svc.SweepStale()
-			_ = st.DeleteStaleSessions(30 * 24 * time.Hour)
+			_ = st.DeleteStaleSessions(store.SessionMaxAge)
 		}
 	}()
 

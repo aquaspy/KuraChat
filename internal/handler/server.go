@@ -98,6 +98,9 @@ func (s *Server) sessionMiddleware(next http.Handler) http.Handler {
 		ctx := r.Context()
 		if c, err := r.Cookie(SessionCookie); err == nil && c.Value != "" {
 			if sess, err := s.Store.TouchSession(c.Value); err == nil {
+				// Renew the persistent cookie alongside last_seen_at so the
+				// login survives browser restarts (sliding window).
+				s.setSessionCookie(w, r, sess.ID)
 				ctx = context.WithValue(ctx, sessionKey, sess)
 				if u, err := s.Store.FindUser(sess.UserID); err == nil {
 					ctx = context.WithValue(ctx, userKey, u)
@@ -217,6 +220,8 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, id str
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   s.secureCookies(r),
+		MaxAge:   int(store.SessionMaxAge.Seconds()),
+		Expires:  time.Now().Add(store.SessionMaxAge),
 	})
 }
 

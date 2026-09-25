@@ -271,6 +271,40 @@ func TestAuthFlow(t *testing.T) {
 	}
 }
 
+func TestSessionCookiePersistent(t *testing.T) {
+	f := newFlow(t, nil)
+	f.seedUser("persist@x.com", "secret-ok")
+	code, _, h := f.post("/login", url.Values{"email": {"persist@x.com"}, "password": {"secret-ok"}}, nil)
+	if code != 303 {
+		t.Fatalf("login = %d", code)
+	}
+	c := sessionCookie(t, h)
+	if c.MaxAge < int((29 * 24 * time.Hour).Seconds()) {
+		t.Fatalf("login cookie MaxAge = %d, want ~30 days", c.MaxAge)
+	}
+	if time.Until(c.Expires) < 29*24*time.Hour {
+		t.Fatalf("login cookie Expires = %v, want ~30 days out", c.Expires)
+	}
+	// Authenticated requests renew the cookie (sliding window), so the
+	// login survives browser restarts until 30 days idle.
+	_, _, h = f.get("/", nil)
+	c = sessionCookie(t, h)
+	if c.MaxAge <= 0 || time.Until(c.Expires) < 29*24*time.Hour {
+		t.Fatalf("renewed cookie = MaxAge %d Expires %v", c.MaxAge, c.Expires)
+	}
+}
+
+func sessionCookie(t *testing.T, h http.Header) *http.Cookie {
+	t.Helper()
+	for _, c := range (&http.Response{Header: h}).Cookies() {
+		if c.Name == SessionCookie {
+			return c
+		}
+	}
+	t.Fatalf("no %q cookie in %v", SessionCookie, h.Values("Set-Cookie"))
+	return nil
+}
+
 func TestSignupClosed(t *testing.T) {
 	f := newFlow(t, func(c *config.Config) { c.SignupEnabled = false })
 	if code, _, h := f.get("/signup", nil); code != 303 || h.Get("Location") != "/login" {

@@ -47,6 +47,10 @@ func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
 	return s, nil
 }
 
+// SessionMaxAge bounds both the login cookie lifetime and the
+// server-side stale sweep, so they expire together.
+const SessionMaxAge = 30 * 24 * time.Hour
+
 const sessionCols = `id, user_id, unlocked_at, flash_notice, flash_alert,
 	created_at, last_seen_at`
 
