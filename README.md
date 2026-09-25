@@ -1,8 +1,10 @@
 # KuraChat
 
-**A calm place to talk to Grok — on a machine you own.**
+**A calm place to talk to your model — on a machine you own.**
 
-KuraChat is a self-hosted chat PWA. One SQLite file, no Redis, no third-party chat UI logging your prompts into someone else's product. You bring an [xAI](https://console.x.ai) API key. Keys stay on the server. Conversations sync across your devices because they live in *your* database.
+KuraChat is a self-hosted chat PWA. One SQLite file, no Redis, no third-party chat UI logging your prompts into someone else's product. You bring an [OpenRouter](https://openrouter.ai/settings/keys) API key. Keys stay on the server. Conversations sync across your devices because they live in *your* database.
+
+One static Go binary (~14 MB, ~20 MB RAM) serves the whole app: pages, streaming replies, uploads, and the PWA shell.
 
 ---
 
@@ -10,22 +12,24 @@ KuraChat is a self-hosted chat PWA. One SQLite file, no Redis, no third-party ch
 
 Public chat products are optimized for engagement and billing. KuraChat is optimized for **quality replies** and **obvious cost**.
 
-- **Grok for writing and reasoning.** The model is xAI Grok (default `grok-4.3`). You can pin a stronger model with env if you want.
-- **Web search is opt-in, per chat.** The composer has a **Web** toggle that defaults **off**. The first message locks it for that conversation (flipping later would break prompt cache). Grok still decides whether to search and how much.
-- **Same bill as the model.** When Web is on, Grok uses xAI's server-side `web_search` on your existing `XAI_API_KEY`. No second search vendor.
-- **Honest threat model.** Messages are plaintext SQLite on this server. They are sent to xAI to generate replies. Attached photos live on this server's disk and are **re-sent to xAI** on later turns while that message is still in the model window. Deleting a chat purges its images. Web turns also send queries through xAI's search (and from there onto the public web). The app always sets `store=false`, so xAI is not asked to keep the chat. Chat turns send a `prompt_cache_key` (the conversation id) so xAI can reuse a prompt prefix on the same server — that is billing/latency, not storing the transcript. Optional Zero Data Retention is a team setting on the xAI console, not a model name. Share links let anyone with the URL read that chat (including photos). This is **not** end-to-end encryption.
+- **Any model, one env var.** Replies come from OpenRouter. Out of the box you get a short menu of cheap-but-capable models (luna, deepseek flash, qwen flash, muse glimmer, grok) — plenty for daily chat, and swappable: set `OPENROUTER_MODELS` to a comma-separated list for your own picker, or `OPENROUTER_MODEL` to a single slug to hide the picker entirely. Each chat also remembers its own reasoning effort (default from `OPENROUTER_REASONING_EFFORT`). No code changes either way.
+- **Explicit web search.** The model answers from its own knowledge unless the globe toggle in the composer is on for that turn. Search runs through OpenRouter's web plugin (pinned to the Exa engine, so results don't change when you switch models) and comes back with a Sources fold under the reply. A second toggle switches that turn to deep search (deeper Exa mode, more results) for research questions. Titles and compaction never search.
+- **Voice mode.** One mic button: it transcribes, polishes the grammar, then either sends right away or stages the draft for review (per-chat toggle). A second per-chat toggle reads every reply aloud in the voice matching its language. Any finished reply can also be replayed from its Listen button. Every leg runs through OpenRouter on the same key and meters into the chat cost like any other usage.
+- **Honest threat model.** Messages are plaintext SQLite on this server. They are sent to OpenRouter, which routes them to a provider to generate replies. On search turns the question also reaches the search engine (Exa by default) via OpenRouter. Attached photos and PDFs live on this server's disk and are **re-sent** on later turns while that message is still in the model window. Deleting a chat purges its attachments. Word and PowerPoint uploads are converted to PDF locally first (headless LibreOffice, never leaves this server) and enter the same pipeline. PDFs are parsed by OpenRouter's file-parser plugin (mistral-ocr engine): the file leaves OpenRouter for Mistral's OCR API under OpenRouter's own key — Mistral does not train on it but retains it 30 days — and it is re-parsed on every turn it is attached to, so per-page OCR fees repeat per turn. Every request enforces Zero Data Retention provider routing (`provider.zdr`), on top of whatever ZDR you set on the OpenRouter account — but that covers *model provider* routing only: per OpenRouter's docs ZDR does not extend to plugins, so neither the search queries (Exa offers ZDR on Enterprise plans only) nor the Mistral OCR step are under ZDR. Chat turns send a `session_id` (the conversation id) so OpenRouter keeps one conversation on a warm provider cache — that is billing/latency, not storing the transcript. Share links let anyone with the URL read that chat (including photos). This is **not** end-to-end encryption.
 - **Same calm shell as the rest of Kura.** Cookie auth, idle lock (per device), PWA offline *reads*, Compose bound to localhost, signup you can shut off.
 
-It sits next to [KuraNotes](https://github.com/aquaspy/KuraNotes), [KuraHome](https://github.com/aquaspy/KuraHome), [KuraCalendar](https://github.com/aquaspy/KuraCalendar), and [KuraSpend](https://github.com/aquaspy/KuraSpend) — same family, **separate** volume and database. Notes never leave your VPS; chat *must* leave toward xAI. Mixing them would be the wrong kind of clever.
+It sits next to [KuraNotes](https://github.com/aquaspy/KuraNotes), [KuraHome](https://github.com/aquaspy/KuraHome), [KuraCalendar](https://github.com/aquaspy/KuraCalendar), and [KuraSpend](https://github.com/aquaspy/KuraSpend) — same family, **separate** volume and database. Notes never leave your VPS; chat *must* leave toward OpenRouter. Mixing them would be the wrong kind of clever.
 
 ---
 
 ## What you get
 
 - Multi-user instance; each person owns many conversations
-- Streaming replies over Action Cable / Turbo Streams
-- Per-chat **Web** toggle (chosen on the first message, remembered in the browser for new chats)
-- Attach up to 4 images per message (Grok sees them; follow-ups keep seeing them while that turn is in context)
+- Streaming replies over server-sent events + htmx fragment swaps
+- Per-chat model picker with price-tier dots (green/amber/red from live OpenRouter pricing; every reply is labeled with the model that wrote it)
+- Per-chat reasoning effort picker (sticky; titles and compaction always use `none`)
+- Explicit per-turn web search with a Sources fold (Exa engine via OpenRouter; off unless toggled), plus a deep-search toggle for research questions
+- Attach up to 4 files per message (images JPEG/PNG/WebP/GIF, or PDF, up to 8 MB each; the model sees them; follow-ups keep seeing them while that turn is in context). PDFs go through OpenRouter's file-parser plugin (`OPENROUTER_PDF_ENGINE`, default `mistral-ocr`)
 - Optional read-only share links (`/s/...`)
 - Automatic context compaction on very long threads (full transcript stays in SQLite)
 - Offline: reopen chats you already opened; sending stays disabled until you are back
@@ -45,9 +49,8 @@ cp .env.example .env
 Edit `.env`. At minimum:
 
 ```bash
-SECRET_KEY_BASE=          # paste: openssl rand -hex 64
 KURA_HOST=chat.example.com
-XAI_API_KEY=xai-...       # from https://console.x.ai
+OPENROUTER_API_KEY=sk-or-...  # from https://openrouter.ai/settings/keys
 SIGNUP_ENABLED=true       # first account, then false
 FORCE_SSL=false           # true once HTTPS terminates in front
 BIND=127.0.0.1:3000
@@ -62,7 +65,7 @@ docker compose up -d --build
 Create the first account in the browser (`http://127.0.0.1:3000`), or:
 
 ```bash
-docker compose exec web bin/rails kura:create EMAIL=you@example.com PASSWORD='at-least-8'
+docker compose exec web ./kurachat create EMAIL=you@example.com PASSWORD='at-least-8'
 ```
 
 **Lock signup** so strangers cannot burn your API credits:
@@ -75,22 +78,33 @@ docker compose up -d
 
 > **Important:** `docker compose restart` does **not** reload `.env`. Use `docker compose up -d`.
 
-### Secrets
+There are no cookie-signing secrets to manage: sessions are opaque random ids in SQLite. Losing the database loses everything; losing anything else loses nothing.
 
-Pick **one**. You do not need both.
+### Coming from the Rails version
 
-| Approach | When | How |
-| --- | --- | --- |
-| **`SECRET_KEY_BASE`** (recommended) | Compose / VPS | `openssl rand -hex 64` → `.env` |
-| **`RAILS_MASTER_KEY`** | Rails credentials | Regenerate with `EDITOR=true bin/rails credentials:edit`, put `config/master.key` in `.env` |
+The Go app reads its own `kurachat.sqlite3`, so the Rails database is imported once:
 
-A random hex will not decrypt the shipped `credentials.yml.enc`. Losing the key does not lose chats — only session cookies.
+```bash
+# 1. Back up the old volume (SQLite + Active Storage blobs).
+docker compose exec web tar -C /rails/storage -cf - . > kurachat-rails-backup.tar
+
+# 2. Deploy the Go image (same kura_chat_data volume, now mounted at /data).
+docker compose up -d --build
+
+# 3. Import the old database + uploads into the new layout.
+docker compose exec web ./kurachat import /data/production.sqlite3 /data
+
+# 4. Verify in the browser, then delete the legacy files:
+#    /data/production.sqlite3* and the two-letter blob directories.
+```
+
+Users keep their passwords. Everyone signs in again (sessions are not imported). Uploads that predate the rewrite keep their original bytes; HEIC originals stay downloadable but get no new thumbnails.
 
 ### Reverse proxy (Caddy or nginx)
 
 The app listens on `BIND` (default `127.0.0.1:3000`) and does not claim 80/443. Point your proxy there, set `FORCE_SSL=true`, then `docker compose up -d`.
 
-**Action Cable needs a WebSocket upgrade on `/cable`.** If HTTPS terminates in front and `FORCE_SSL` is false, the socket is rejected and the UI sticks on “Thinking…”.
+Live replies stream over **plain SSE** (`/conversations/:id/events`) — no WebSocket upgrade needed. If your proxy buffers responses, disable buffering for that route or the UI sticks on “Thinking…”.
 
 **Caddy:**
 
@@ -103,20 +117,12 @@ chat.example.com {
 **nginx:**
 
 ```
-location /cable {
-  proxy_pass http://127.0.0.1:3000;
-  proxy_http_version 1.1;
-  proxy_set_header Upgrade $http_upgrade;
-  proxy_set_header Connection "upgrade";
-  proxy_set_header Host $host;
-  proxy_set_header X-Forwarded-Proto $scheme;
-  proxy_read_timeout 3600;
-}
-
 location / {
   proxy_pass http://127.0.0.1:3000;
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-Proto $scheme;
+  proxy_read_timeout 3600;
+  proxy_buffering off;
 }
 ```
 
@@ -125,49 +131,40 @@ location / {
 No email recovery — reset from the box:
 
 ```bash
-docker compose exec web bin/rails kura:users
-docker compose exec web bin/rails kura:create EMAIL=you@example.com PASSWORD='at-least-8'
-docker compose exec web bin/rails kura:password EMAIL=you@example.com PASSWORD='new-secret'
+docker compose exec web ./kurachat users
+docker compose exec web ./kurachat create EMAIL=you@example.com PASSWORD='at-least-8'
+docker compose exec web ./kurachat password EMAIL=you@example.com PASSWORD='new-secret'
 ```
 
 ### Backup
 
-Chats live in the `kura_chat_data` volume: SQLite (`storage/production.sqlite3`) plus attached images under `storage/`. The tar below copies both.
+Chats live in the `kura_chat_data` volume: SQLite (`kurachat.sqlite3`) plus uploads under `uploads/`. The tar below copies both.
 
 ```bash
-docker compose exec web tar -C /rails/storage -cf - . > kurachat-backup.tar
+docker compose exec web tar -C /data -cf - kurachat.sqlite3 uploads > kurachat-backup.tar
 ```
 
 ### Shared browsers
 
 Sign out **and** wait for the cache wipe. Until then, another person opening the PWA offline can see the previous user’s cached conversation HTML.
 
-### Runtime (queue & YJIT)
-
-Solid Queue stays **on** here (`SOLID_QUEUE_IN_PUMA` + `:solid_queue` adapter). Chat needs a durable worker for jobs like failing stale completions — unlike the quieter sister apps, which run Active Job `:async` with no queue supervisor.
-
-YJIT stays **on**. Rails 8.1 enables it in production via `config.yjit`; the image also sets `RUBY_YJIT_ENABLE=1`. Leave it on.
-
 ---
 
 ## Cost
 
-The chat bar shows a running USD total for that conversation. New turns use the amount xAI actually billed (`cost_in_usd_ticks`: model, cache, reasoning, images, and web_search). Older turns without that field fall back to the public list price plus counted `web_search` calls.
+The chat bar shows a running USD total for that conversation. Every turn stores the amount OpenRouter actually billed (`usage.cost`: model, cache, and reasoning tokens), so the total is exact — there are no price tables to go stale. Pre-migration xAI turns keep their billed totals too. Turns with token counts but no billed total contribute nothing and flip the pill to `est.`, with the hint saying the sum is incomplete.
 
-**Web does not mean “this turn will search.”** The toggle only *offers* xAI’s `web_search` tool. Grok decides whether to call it and how many times. A greeting with Web on can cost **zero extra search fees**. Each successful search is billed at **$5 / 1k calls** (~**$0.005** each) plus the tokens from the pages.
+Web search costs one plugin fee per searched turn (Exa `auto`: $0.007 for up to 10 results) plus the input tokens of the injected excerpts. OpenRouter folds the fee into `usage.cost`, so the pill already includes it; each searched turn also itemizes the fee (`search_engine`, `search_cost_usd`) in its stored usage for transparency. If your OpenRouter Activity page ever shows the fee billed separately from the turn, set `SEARCH_FEE_INCLUDED=false` and the itemized fee is added on top instead.
 
-What *does* always change with Web on:
+`OPENROUTER_REASONING_EFFORT` (default **`high`**) is how hard the model thinks (`none` / `low` / `medium` / `high` / `xhigh` / `max`, model permitting), overridable per chat in the settings row. Reasoning tokens are billed as output, so `high` trades money and latency for harder thinking on every turn. Titles and compaction summaries always use `none`.
 
-- **Thinking:** `XAI_WEB_REASONING_EFFORT` (default **`medium`**) instead of `XAI_REASONING_EFFORT` (default **`low`**). That is more reasoning tokens on *every* Web-on turn, even if Grok never searches. These envs are how hard the model thinks (`none` / `low` / `medium` / `high` / `xhigh`), not search volume. Set them on the VPS; the UI only has the Web switch.
-- **Prompt cache:** the system line that says “web this turn / no web this turn” sits early in the prompt. **Flipping the toggle mid-chat changes that prefix**, so later history and photos are less likely to hit the cheap cached-input rate. Leaving Web **on for a whole research chat** (or **off** for a casual one) is cheaper than toggling every message. Leaving Web on *all the time* still pays `medium` thinking on “hi” turns — that is usually not worth it.
-
-There is **no** search intensity setting (no off/low/medium/high for the web tool).
-
-Cached input is cheaper than a full prompt when the conversation prefix is unchanged. xAI bills a **2× long-context** rate once a request’s prompt (including cached tokens) reaches **200k**; compaction exists to stay under that, not because the model’s window is small. The Web toggle defaults **off** and **locks after the first message** in that chat. Start a new chat to change it. Grok sees the thread until about **150k** estimated tokens. Past that, a short rolling summary plus about **32k** of recent raw messages (`CHAT_KEEP_RECENT_TOKENS`). The full transcript stays in SQLite. Attached images are resized to JPEG before Grok sees them; image tokens bill as input (and should cache on follow-ups if the prefix is stable). This is **not** Grok Imagine — KuraChat does not generate pictures.
+Cached input is cheaper than a full prompt when the conversation prefix is unchanged. gpt-6-luna raises its rates past **272k** prompt tokens; compaction exists to stay under that, not because the model’s window is small (it is ~1M). The model sees the thread until about **150k** estimated tokens. Past that, a short rolling summary plus about **32k** of recent raw messages (`CHAT_KEEP_RECENT_TOKENS`). The full transcript stays in SQLite. Attached images are resized to JPEG before the model sees them; image tokens bill as input (and should cache on follow-ups since the prefix is stable). KuraChat does not generate pictures.
 
 ---
 
 ## Model cost bench
+
+Historical: measured against xAI models before the OpenRouter migration; kept for reference until `bench/` is re-pointed.
 
 This bench measures **cost only, not quality**: billed USD for the same 16 scenarios (search, reasoning, writing, code, explainers, one image, one cache probe) per model and effort level. Billed cost blends both drivers — price per token *and* verbosity — so the cheapest list price does not always win. Quality is ranked separately on blind sheets in `bench/results/`.
 
@@ -201,22 +198,25 @@ Speed (total request time, low effort, same 16 scenarios):
 
 ## Local development
 
+Needs: Go (1.24+), the `templ` CLI, and the standalone `tailwindcss` v4 binary.
+
 ```bash
-bin/setup
-export XAI_API_KEY=...          # required to generate replies
+go install github.com/a-h/templ/cmd/templ@latest
+# tailwindcss: https://github.com/tailwindlabs/tailwindcss/releases (v4 standalone)
+
+export OPENROUTER_API_KEY=...   # required to generate replies
 bin/dev
 ```
 
-Open http://127.0.0.1:3000
+Open http://127.0.0.1:3000 (`bin/dev` also serves a live-reload proxy on :7331).
 
-If you cloned without a `master.key`:
+Checks:
 
 ```bash
-rm -f config/credentials.yml.enc
-EDITOR=true bin/rails credentials:edit
+templ generate && gofmt -l cmd internal && go vet ./... && go test ./...
 ```
 
-Do not commit `config/master.key`.
+Layout: `cmd/kurachat` (serve/users/create/password/import), `internal/config`, `internal/store` (SQLite), `internal/i18n`, `internal/handler` (Chi routes), `internal/views` (templ), `internal/chat` (completer, markdown, cost), `internal/openrouter`, `internal/images`, `internal/docs`, `web/static` (CSS source, JS, PWA).
 
 ---
 
@@ -224,6 +224,7 @@ Do not commit `config/master.key`.
 
 - **`master`** — development. Land and iterate here first.
 - **`stable`** — tested code only. Promote from `master` once a change has been run and verified.
+- **`go`** — this rewrite. Merge into `master` after verification, then promote as usual.
 
 They sit on the same commit until the next change is under test.
 
@@ -233,18 +234,29 @@ They sit on the same commit until the next change is under test.
 
 | Variable | What it does |
 | --- | --- |
-| `SECRET_KEY_BASE` | Session cookies (Compose). `openssl rand -hex 64` |
-| `XAI_API_KEY` | Required to generate replies |
-| `XAI_MODEL` | Default `grok-4.3`. `grok-4.6` is stronger at tools |
-| `XAI_REASONING_EFFORT` | How hard Grok thinks on model-only turns. Default `low`. Not search volume. |
-| `XAI_WEB_REASONING_EFFORT` | Same, but for Web-on turns. Default `medium`. Still not search volume — Grok picks how much to search. Applies even if it does not search. |
-| `CHAT_REPLY_MAX_TOKENS` | Optional hard cap on reply length. Unset = no cap |
-| `CHAT_WINDOW_TOKENS` | Max estimated tokens sent as Grok’s prompt. Default `150000` (under the 200k long-context price cliff) |
+| `OPENROUTER_API_KEY` | Required to generate replies |
+| `OPENROUTER_MODEL` | Single OpenRouter slug (date-pinned slug also works). Hides the picker; unset = default menu |
+| `OPENROUTER_MODELS` | Comma-separated slugs for the model picker. First is the default; unset = `OPENROUTER_MODEL` when set, else the cheap default menu (luna, deepseek-v4.1-flash, qwen3.8-flash, muse-glimmer-30b, grok-4.3) |
+| `OPENROUTER_TIER_CHEAP_MAX` | Blended $/1M at/below = green dot. Default `1` |
+| `OPENROUTER_TIER_EXPENSIVE_MIN` | Blended $/1M at/above = red dot (between = amber). Default `10` |
+| `OPENROUTER_TIER_PINS` | Force tiers: `id:tier,...` (e.g. `x-ai/grok-4.3:cheap`). Unset = all from live pricing |
+| `OPENROUTER_REASONING_EFFORT` | Default thinking effort. Default `high` (each chat can override it in the UI) |
+| `OPENROUTER_PDF_ENGINE` | PDF parser for attached documents: `mistral-ocr` (default), `cloudflare-ai`, `native` |
+| `SEARCH_ENABLED` | Web search toggle. Default `true` (per-turn opt-in; nothing searches unless toggled) |
+| `SEARCH_ENGINE` | Plugin engine: `exa` (default), `native`, `parallel`, `perplexity`, `firecrawl` |
+| `SEARCH_MODE` | Engine mode. Default `auto` (Exa keyword+neural hybrid); `fast` trades depth for latency at the same price |
+| `SEARCH_MAX_RESULTS` | Results per search. Default `5` (1–25; past 10 Exa/Parallel add $0.001/result) |
+| `SEARCH_DEEP_MODE` | Deep toggle mode. Default `deep-lite` ($0.012; `deep` and `deep-reasoning` go further and slower) |
+| `SEARCH_DEEP_MAX_RESULTS` | Results per deep search. Default `10` |
+| `SEARCH_FEE_INCLUDED` | Search fee already inside `usage.cost`. Default `true`; set `false` only if Activity shows separate billing |
+| `CHAT_REPLY_MAX_TOKENS` | Optional hard cap on reply length (reasoning shares the budget). Unset = no cap |
+| `CHAT_WINDOW_TOKENS` | Max estimated tokens sent as the model’s prompt. Default `150000` (under the 272k price step) |
 | `CHAT_KEEP_RECENT_TOKENS` | After compaction, how much recent raw text to keep. Default `32000` |
 | `SIGNUP_ENABLED` | Public signup. Turn off after the first account |
 | `FORCE_SSL` | `true` when Caddy/nginx terminates HTTPS |
-| `KURA_HOST` | Public hostname. Share links use this |
+| `KURA_HOST` | Public hostname allowlist. Share links use the request host |
 | `BIND` | Default `127.0.0.1:3000` |
+| `DATA_DIR` | SQLite + uploads. Default `storage` (Compose: `/data`) |
 
 ---
 

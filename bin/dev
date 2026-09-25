@@ -1,16 +1,15 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
+# Dev loop: Tailwind watcher + templ watcher/proxy + the Go server.
+# Needs: go, templ, tailwindcss (standalone) on PATH.
+set -euo pipefail
+cd "$(dirname "$0")/.."
 
-if ! gem list foreman -i --silent; then
-  echo "Installing foreman..."
-  gem install foreman
-fi
+export PATH="$HOME/.local/bin:$PATH"
 
-# Default to port 3000 if not specified
-export PORT="${PORT:-3000}"
+tailwindcss --input web/static/css/input.css --output web/static/css/app.css --watch &
+TAILWIND_PID=$!
+trap "kill $TAILWIND_PID" EXIT
 
-# Let the debug gem allow remote connections,
-# but avoid loading until `debugger` is called
-export RUBY_DEBUG_OPEN="true"
-export RUBY_DEBUG_LAZY="true"
-
-exec foreman start -f Procfile.dev "$@"
+# templ restarts the server on template changes and live-reloads the browser.
+# App: http://127.0.0.1:3000 — proxied with reload: http://127.0.0.1:7331
+templ generate --watch --proxy=http://127.0.0.1:3000 --cmd="go run ./cmd/kurachat serve"

@@ -43,3 +43,7 @@
 __pycache__/
 *.pyc
 /bench/results/*.mapping.json
+
+# Go build outputs.
+/kurachat
+/web/static/css/app.css
